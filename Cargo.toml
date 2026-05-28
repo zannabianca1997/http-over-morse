@@ -4,12 +4,17 @@ version = "0.1.0"
 edition = "2024"
 license-file = "LICENSE"
 
+[lib]
+bench = false
+test = false
+
 [[bin]]
 bench = false
 name = "http-over-morse"
 test = false
 
 [dependencies]
+avr-device = { version = "0.8.1", features = ["atmega328p"] }
 embedded-hal = "1.0"
 nb = "1.1.0"
 panic-halt = "1.0.0"
