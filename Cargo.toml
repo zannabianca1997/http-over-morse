@@ -15,7 +15,7 @@ test = false
 
 [dependencies]
 avr-device = { version = "0.8.1", features = ["atmega328p"] }
-embedded-hal = "1.0"
+embedded-hal = "1.0.0"
 nb = "1.1.0"
 panic-halt = "1.0.0"
 ufmt = "0.2.0"

@@ -4,55 +4,53 @@
 use core::num::NonZero;
 
 use arduino_hal::{
-    hal::{Atmega, Usart},
+    hal::{
+        Atmega, Usart,
+        usart::{UsartReader, UsartWriter},
+    },
     pac::TC0,
+    prelude::_embedded_hal_serial_Write,
     usart::UsartOps,
 };
 
-use crate::write::wire::TimerCallback;
+use crate::{process::Process, write::wire::TimerCallback};
 
 pub mod interrupts;
 mod time;
+mod process {
 
-mod write {
-    pub mod wire {
-        use core::{convert::Infallible, num::NonZero};
+    /// A running process
+    pub trait Process {
+        /// The type of item produced
+        type Ok;
 
-        use arduino_hal::prelude::_unwrap_infallible_UnwrapInfallible;
-        use embedded_hal::digital::{OutputPin, PinState};
+        /// Error type
+        type Err;
 
-        use crate::time::{MILLIS_FOR_TICK, Time};
+        /// Do some work without blocking
+        fn poll(&mut self) -> nb::Result<Self::Ok, Self::Err>;
+    }
 
-        pub struct TimerCallback<Tx> {
-            pin: Tx,
-            state: PinState,
-        }
+    impl<T> Process for T
+    where
+        T: arduino_hal::prelude::_embedded_hal_serial_Read<u8>,
+    {
+        type Ok = u8;
+        type Err = T::Error;
 
-        impl<Tx> TimerCallback<Tx> {
-            pub fn new(pin: Tx) -> Self {
-                Self {
-                    pin,
-                    state: PinState::Low,
-                }
-            }
-        }
-
-        const TICKS: NonZero<Time> = NonZero::new((1000 / MILLIS_FOR_TICK) as Time).unwrap();
-
-        impl<Tx> crate::time::TimerCallback for TimerCallback<Tx>
-        where
-            Tx: OutputPin<Error = Infallible>,
-        {
-            fn triggered(
-                &mut self,
-                _cs: avr_device::interrupt::CriticalSection,
-            ) -> Option<core::num::NonZero<crate::time::Time>> {
-                self.state = !self.state;
-                self.pin.set_state(self.state).unwrap_infallible();
-                Some(TICKS)
-            }
+        fn poll(&mut self) -> nb::Result<Self::Ok, Self::Err> {
+            self.read()
         }
     }
+}
+
+mod write {
+    //! Writing processes
+
+    pub mod wire;
+}
+mod read {
+    //! Reading processes
 }
 
 /// Firmware
@@ -64,7 +62,8 @@ pub struct App<
     WireRx,
     WireTx,
 > {
-    serial: Usart<Serial, SerialRx, SerialTx, Clock>,
+    read: UsartReader<Serial, SerialRx, SerialTx, Clock>,
+    write: UsartWriter<Serial, SerialRx, SerialTx, Clock>,
     rx: WireRx,
     clock: time::Clock<TimerCallback<WireTx>>,
 }
@@ -82,13 +81,38 @@ impl<Serial: UsartOps<Atmega, SerialRx, SerialTx>, SerialRx, SerialTx, Clock, Wi
         tx: WireTx,
         timer: TC0,
     ) -> (Self, Interrupts<WireTx>) {
+        let (read, write) = serial.split();
+
         let (clock, clock_interrupts) = time::Clock::new(timer, TimerCallback::new(tx));
 
-        (Self { serial, rx, clock }, (clock_interrupts,))
+        (
+            Self {
+                read,
+                write,
+                rx,
+                clock,
+            },
+            (clock_interrupts,),
+        )
     }
 
     pub fn main_loop(&mut self) -> ! {
         self.clock.timer.try_set(NonZero::new(1).unwrap());
-        loop {}
+        loop {
+            let ch = loop {
+                match self.read.poll() {
+                    Ok(ch) => break ch,
+                    Err(nb::Error::WouldBlock) => (),
+                    Err(nb::Error::Other(err)) => match err {},
+                }
+            };
+            loop {
+                match self.write.write(ch) {
+                    Ok(()) => break,
+                    Err(nb::Error::WouldBlock) => (),
+                    Err(nb::Error::Other(err)) => match err {},
+                }
+            }
+        }
     }
 }
