@@ -15,34 +15,10 @@ use arduino_hal::{
 
 use crate::{process::Process, write::wire::TimerCallback};
 
+mod encoding;
 pub mod interrupts;
+mod process;
 mod time;
-mod process {
-
-    /// A running process
-    pub trait Process {
-        /// The type of item produced
-        type Ok;
-
-        /// Error type
-        type Err;
-
-        /// Do some work without blocking
-        fn poll(&mut self) -> nb::Result<Self::Ok, Self::Err>;
-    }
-
-    impl<T> Process for T
-    where
-        T: arduino_hal::prelude::_embedded_hal_serial_Read<u8>,
-    {
-        type Ok = u8;
-        type Err = T::Error;
-
-        fn poll(&mut self) -> nb::Result<Self::Ok, Self::Err> {
-            self.read()
-        }
-    }
-}
 
 mod write {
     //! Writing processes

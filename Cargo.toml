@@ -17,6 +17,7 @@ test = false
 avr-device = { version = "0.8.1", features = ["atmega328p"] }
 embedded-hal = "1.0.0"
 nb = "1.1.0"
+nunny = { version = "0.2.2", default-features = false }
 panic-halt = "1.0.0"
 ufmt = "0.2.0"
 
@@ -37,3 +38,9 @@ debug = true
 lto = true
 panic = "abort"
 codegen-units = 1
+
+[build-dependencies]
+cargo-emit = "0.2.1"
+itertools = "0.14.0"
+proc-macro2 = "1.0.106"
+quote = "1.0.45"
