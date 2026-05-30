@@ -26,6 +26,11 @@ where
     }
 }
 
+/// Store interrupts
+///
+/// The usual lifetime of this object is inside a static. It should be
+/// initialized from main before turning on interrupts. Each interrupt then call
+/// in to this storage.
 pub struct InterruptStorage<I> {
     interrupts: Mutex<UnsafeCell<MaybeUninit<I>>>,
 }

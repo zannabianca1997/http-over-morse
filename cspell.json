@@ -3,6 +3,7 @@
     "compa",
     "USART",
     "atmega",
-    "nunny"
+    "nunny",
+    "Uninit"
   ]
 }
