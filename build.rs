@@ -366,9 +366,51 @@ const fn default_max_load() -> f32 {
     1.5
 }
 
+fn seed_to_hex<S: serde::Serializer>(seed: &[u8; 32], serializer: S) -> Result<S::Ok, S::Error> {
+    let mut hex = String::with_capacity(64);
+    for byte in seed {
+        use std::fmt::Write;
+        write!(&mut hex, "{:02x}", *byte).unwrap();
+    }
+    serializer.serialize_str(&hex)
+}
+
+fn seed_from_hex<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<[u8; 32], D::Error> {
+    use serde::de::Error;
+    let hex = String::deserialize(deserializer)?;
+    if hex.len() != 64 {
+        return Err(D::Error::custom(format!(
+            "hex seed must be 64 characters, got {}",
+            hex.len()
+        )));
+    }
+    let mut seed = [0u8; 32];
+    for (i, chunk) in hex.as_bytes().chunks(2).enumerate() {
+        let high = hex_char_to_nibble(chunk[0])
+            .map_err(|c| D::Error::custom(format!("invalid hex char: {}", c)))?;
+        let low = hex_char_to_nibble(chunk[1])
+            .map_err(|c| D::Error::custom(format!("invalid hex char: {}", c)))?;
+        seed[i] = high << 4 | low;
+    }
+    Ok(seed)
+}
+
+fn hex_char_to_nibble(c: u8) -> Result<u8, char> {
+    match c {
+        b'0'..=b'9' => Ok(c - b'0'),
+        b'a'..=b'f' => Ok(c - b'a' + 10),
+        b'A'..=b'F' => Ok(c - b'A' + 10),
+        _ => Err(c as char),
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct TableCacheInfo {
-    #[serde(default = "default_seed")]
+    #[serde(
+        default = "default_seed",
+        serialize_with = "seed_to_hex",
+        deserialize_with = "seed_from_hex"
+    )]
     seed: <RNG as SeedableRng>::Seed,
     #[serde(default = "default_max_load")]
     max_load: f32,
