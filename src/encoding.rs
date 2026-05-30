@@ -1,14 +1,14 @@
 //! General encoding stuff
 
-use core::hash::Hash;
-use core::hash::Hasher;
 use core::num::NonZeroU8;
 
 use crate::time::MILLIS_FOR_TICK;
 use crate::time::Time;
 
 mod symbol;
-pub use symbol::*;
+pub use symbol::{DOT, LINE, Symbol};
+
+mod perfect_hash;
 
 pub const DOT_LENGTH: Time = (333 / MILLIS_FOR_TICK) as Time;
 pub const LINE_LENGTH: Time = 3 * DOT_LENGTH;
@@ -44,7 +44,7 @@ pub struct Letter(NonZeroU8);
 
 mod generated {
     //! Code generated from `morse.txt`
-    use crate::encoding::Symbol;
+    use super::{perfect_hash::*, symbol::*};
 
     include! {env!("MORSE_GENERATED_RS")}
 }

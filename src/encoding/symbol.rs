@@ -12,12 +12,11 @@ pub enum Symbol {
 }
 pub use Symbol::*;
 
-impl phf::PhfHash for Symbol {
-    fn phf_hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        match self {
-            DOT => false,
-            LINE => true,
+/// Mixes seven bytes and a symbol together
+pub(super) const fn u7_and_symbol(u7: u8, symbol: Symbol) -> u8 {
+    (u7 << 1)
+        | match symbol {
+            DOT => 0,
+            LINE => 1,
         }
-        .phf_hash(state);
-    }
 }

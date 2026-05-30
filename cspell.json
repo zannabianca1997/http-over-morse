@@ -5,6 +5,8 @@
     "atmega",
     "nunny",
     "Uninit",
-    "supersequence"
+    "supersequence",
+    "codegen",
+    "hashers"
   ]
 }

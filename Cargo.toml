@@ -19,13 +19,20 @@ embedded-hal = "1.0.0"
 nb = "1.1.0"
 nunny = { version = "0.2.2", default-features = false }
 panic-halt = "1.0.0"
-phf = { version = "0.13.1", default-features = false }
 ufmt = "0.2.0"
 
 [dependencies.arduino-hal]
 git = "https://github.com/rahix/avr-hal"
 rev = "e5c8f37fe48419956e722490a82b9ca9b9fc61a2"
 features = ["arduino-nano"]
+
+[build-dependencies]
+cargo-emit = "0.2.1"
+chacha8rand = { version = "0.1.2", features = ["rand_core_0_9", "std"] }
+itertools = "0.14.0"
+proc-macro2 = "1.0.106"
+quote = "1.0.45"
+rand = "0.9"
 
 # Configure the build for minimal size - AVRs have very little program memory
 [profile.dev]
@@ -39,11 +46,3 @@ debug = true
 lto = true
 panic = "abort"
 codegen-units = 1
-
-[build-dependencies]
-cargo-emit = "0.2.1"
-itertools = "0.14.0"
-phf = { version = "0.13.1", default-features = false }
-phf_codegen = "0.13.1"
-proc-macro2 = "1.0.106"
-quote = "1.0.45"

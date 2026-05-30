@@ -2,7 +2,8 @@ use std::{
     cmp::{Reverse, min},
     collections::{BTreeMap, BTreeSet},
     env, fs,
-    iter::once,
+    iter::{self, once},
+    num::NonZeroU16,
     path::PathBuf,
     range::Range,
 };
@@ -11,7 +12,12 @@ const MORSE_DEFINITIONS: &str = "src/morse.txt";
 
 #[path = "src/encoding/symbol.rs"]
 mod symbol;
+use rand::{distr::StandardUniform, prelude::Rng};
 use symbol::*;
+
+#[path = "src/encoding/perfect_hash.rs"]
+mod perfect_hash;
+use perfect_hash::*;
 
 use itertools::Itertools;
 use proc_macro2::{Ident, TokenStream};
@@ -214,6 +220,8 @@ fn decode(definitions: &[(u8, Range<usize>)], symbols_slice: &[Symbol]) -> Token
 
     if states.len() > 256 {
         panic!("Too many states - #[repr(u8)] is going to fail")
+    } else if states.len() > 128 {
+        panic!("Too many states - packing for lookup is going to fail")
     }
 
     {
@@ -237,45 +245,66 @@ fn decode(definitions: &[(u8, Range<usize>)], symbols_slice: &[Symbol]) -> Token
     }
 
     let states = states;
+    assert!(states.values().all(|v| v.variant.is_some_and(|v| v < 128)));
 
     let variants = states.values().map(|v| {
         let name = &v.name;
         let variant = v.variant.unwrap();
         quote! { #name = #variant }
     });
-    let digest_arms = states.iter().flat_map(
-        |(
+    let (digest_lookup, digest_hasher) = {
+        let mut lookup = BTreeMap::new();
+
+        for (
             symbols,
             StateData {
-                name: current_state,
+                variant: current_state_variant,
                 ..
             },
-        )| {
-            [Symbol::DOT, Symbol::LINE]
-                .into_iter()
-                .filter_map(|next| {
-                    let next_symbols = symbols
-                        .iter()
-                        .copied()
-                        .chain(once(next))
-                        .collect::<Vec<_>>();
-                    let next = match next {
-                        DOT => quote! { Symbol::DOT },
-                        LINE => quote! { Symbol::LINE },
-                    };
-                    states.get(&next_symbols).map(
-                        |StateData {
-                             name: next_state, ..
-                         }| {
-                            quote! {
-                                (Self::#current_state, #next) => Some( Self::#next_state )
-                            }
-                        },
-                    )
-                })
-                .collect::<Vec<_>>()
-        },
-    );
+        ) in states.iter()
+        {
+            let current_state_variant = current_state_variant.unwrap();
+            assert!(current_state_variant < 128);
+
+            for next in [Symbol::DOT, Symbol::LINE] {
+                let next_symbols = symbols.iter().copied().chain(once(next)).collect_vec();
+                if let Some(StateData {
+                    name: next_name, ..
+                }) = states.get(&next_symbols)
+                {
+                    let key = u7_and_symbol(current_state_variant, next);
+
+                    let old = lookup.insert(key, next_name);
+
+                    assert!(old.is_none())
+                }
+            }
+        }
+
+        let (
+            Hasher {
+                multiplier,
+                modulus,
+            },
+            lookup,
+        ) = calculate_perfect_hash(lookup);
+
+        let modulus = modulus.get();
+        let modulus = quote! { core::num::NonZeroU16::new(#modulus).unwrap() };
+
+        let lookup_items = lookup.into_vec().into_iter().map(|v| {
+            if let Some(variant) = v {
+                quote! { Some( DecodeState :: #variant ) }
+            } else {
+                quote! { None }
+            }
+        });
+
+        (
+            quote! { [ #( #lookup_items ),* ] },
+            quote! { Hasher { multiplier: #multiplier, modulus: #modulus } },
+        )
+    };
     let symbols_arms = states.iter().map(
         |(
             _,
@@ -288,9 +317,9 @@ fn decode(definitions: &[(u8, Range<usize>)], symbols_slice: &[Symbol]) -> Token
             quote! { Self::#name => &SYMBOLS_SLICE[ #start .. #end  ]}
         },
     );
-    let finish_arms = states.values().filter_map(|StateData { name, value, .. }| {
-        value.map(|value| quote! { Self::#name => Some(#value) })
-    });
+    let not_finals = states
+        .values()
+        .filter_map(|StateData { name, value, .. }| value.is_none().then_some(name));
 
     quote! {
         #[derive(Clone, Copy)]
@@ -315,18 +344,110 @@ fn decode(definitions: &[(u8, Range<usize>)], symbols_slice: &[Symbol]) -> Token
             }
 
             pub const fn digest(self, s: Symbol) -> Option<Self> {
-                match (self, s) {
-                    #( #digest_arms , )*
-                    _ => None
-                }
+                ( #digest_lookup )[ ( #digest_hasher ) .hash( u7_and_symbol(self as u8, s) ) as usize ]
             }
 
             pub const fn finish(self) -> Option<u8> {
                 match self {
-                    #( #finish_arms , )*
-                    _ => None
+                    #( Self::#not_finals  )|* => None,
+                    final_state => Some(final_state as u8)
                 }
             }
         }
     }
+}
+
+type RNG = chacha8rand::ChaCha8Rand;
+const DEFAULT_PHSEED: [u8;32] = *b"\x42\x0e\x9a\x74\x81\x86\x1d\xe6\xde\x5e\xb8\x30\xe8\x68\xe5\x48\x20\x9d\x11\x01\x3b\xb3\xe9\xbe\x60\xaf\x1c\x36\x6b\xd0\x13\x99";
+const DEFAULT_MULTIPLIER: [usize; 2] = [3, 2];
+
+const PRECALCULATED_HASHER: (Hasher, usize) = (
+    Hasher {
+        multiplier: 0x25bd,
+        modulus: NonZeroU16::new(0x39).unwrap(),
+    },
+    0x38,
+);
+
+/// Calculate a perfect hash for a lookup table
+///
+/// Returns the hasher and the size of the array (the maximum mapped + 1)
+fn calculate_perfect_hash<T: Eq>(values: BTreeMap<u8, T>) -> (Hasher, Box<[Option<T>]>) {
+    cargo_emit::rerun_if_env_changed!("CALC_HASHER");
+
+    // Starting point -> null hasher
+    let (mut best_hasher, mut best_size) = if env::var_os("CALC_HASHER").is_some() {
+        (
+            Hasher {
+                multiplier: 1,
+                modulus: NonZeroU16::new(1).unwrap(),
+            },
+            *values.keys().max().unwrap_or(&0) as usize + 1,
+        )
+    } else {
+        PRECALCULATED_HASHER
+    };
+
+    let target = values.len() * DEFAULT_MULTIPLIER[0] / DEFAULT_MULTIPLIER[1];
+
+    let mut hashers = RNG::new(&DEFAULT_PHSEED)
+        .sample_iter::<(u16, NonZeroU16), _>(StandardUniform)
+        .map(|(multiplier, modulus)| Hasher {
+            multiplier,
+            modulus,
+        });
+
+    'hashers: while best_size > target {
+        let hasher = hashers.next().unwrap();
+        let mut size = 0;
+
+        let mut mapped_values: [Option<&T>; 256] = [None; _];
+
+        for (key, value) in &values {
+            let mapped = hasher.hash(*key);
+
+            let req_size = mapped as usize + 1;
+            if req_size >= best_size {
+                // Even if perfect, we know of one better, or equivalent!
+                continue 'hashers;
+            }
+            size = size.max(req_size);
+
+            if mapped_values[mapped as usize].is_some_and(|mapped| mapped != value) {
+                // Not a perfect hasher ...
+                continue 'hashers;
+            }
+            mapped_values[mapped as usize] = Some(value);
+        }
+
+        // Did not exit, so it is a perfect hasher. And it has a better size, or it would have exited before
+        best_hasher = hasher;
+        best_size = size;
+    }
+
+    if env::var_os("CALC_HASHER").is_some() {
+        let multiplier = best_hasher.multiplier;
+        let modulus = best_hasher.modulus.get();
+        let best_size = best_size;
+        cargo_emit::warning!(
+            "Hasher calculated. Remove `CALC_HASHER` env var and set the constant `PRECALCULATED_HASHER` to `{}`",
+            quote! {
+                (
+                    Hasher {
+                        multiplier: #multiplier,
+                        modulus: NonZeroU16::new(#modulus).unwrap(),
+                    },
+                    #best_size,
+                )
+            }
+        );
+    }
+
+    let mut table: Box<[Option<T>]> = iter::from_fn(|| Some(None)).take(best_size).collect();
+
+    for (key, value) in values {
+        table[best_hasher.hash(key) as usize] = Some(value);
+    }
+
+    (best_hasher, table)
 }
