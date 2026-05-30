@@ -1,5 +1,6 @@
 #![no_std]
 #![deny(unsafe_op_in_unsafe_fn)]
+#![feature(cold_path)]
 
 use core::num::NonZero;
 
@@ -9,84 +10,43 @@ use arduino_hal::{
         usart::{UsartReader, UsartWriter},
     },
     pac::TC0,
-    prelude::_embedded_hal_serial_Write,
     usart::UsartOps,
 };
 
 use crate::{
     process::Process,
+    serial_to_wire::{
+        bytes_to_letters::BytesToLetters, letters_to_signals::LettersToSignals,
+        signals_to_wire::TimerCallback,
+    },
     strategies::Discard,
-    write::{letters::ReadLetters, wire::TimerCallback},
+    wire_to_serial::{
+        bytes_to_serial::BytesToSerial, letters_to_bytes::LettersToBytes,
+        signals_to_letters::SignalsToLetters,
+    },
 };
 
 mod encoding;
 pub mod interrupts;
 mod process;
 mod time;
+mod utils {}
 
 mod strategies;
 
-mod write {
+mod serial_to_wire {
     //! Processes for writing to wire
 
-    pub mod letters;
-    pub mod wire;
+    pub mod bytes_to_letters;
+    pub mod letters_to_signals;
+    pub mod signals_to_wire;
 }
-mod read {
+mod wire_to_serial {
     //! Processes for reading from the wire
 
-    pub mod serial {
-        use arduino_hal::prelude::_embedded_hal_serial_Write;
-
-        use crate::process::Process;
-
-        pub struct WriteToSerial<Inner, Serial> {
-            serial: Serial,
-            inner: Inner,
-            writing: Option<u8>,
-        }
-
-        impl<Inner, Serial> WriteToSerial<Inner, Serial> {
-            pub fn new(serial: Serial, inner: Inner) -> Self {
-                Self {
-                    serial,
-                    inner,
-                    writing: None,
-                }
-            }
-        }
-
-        impl<Inner, Serial> Process for WriteToSerial<Inner, Serial>
-        where
-            Inner: Process<Ok = u8>,
-            Serial: _embedded_hal_serial_Write<u8>,
-        {
-            type Ok = ();
-            type Err = Error<Inner::Err, Serial::Error>;
-
-            fn poll(&mut self) -> nb::Result<Self::Ok, Self::Err> {
-                loop {
-                    // Ensure the writing char is empty
-                    while let Some(writing) = self.writing {
-                        match self.serial.write(writing) {
-                            Ok(()) => self.writing = None,
-                            Err(err) => return Err(err.map(Error::Serial)),
-                        }
-                    }
-                    // Get a new char to write
-                    match self.inner.poll() {
-                        Ok(ch) => self.writing = Some(ch),
-                        Err(err) => return Err(err.map(Error::Inner)),
-                    }
-                }
-            }
-        }
-
-        pub enum Error<I, S> {
-            Inner(I),
-            Serial(S),
-        }
-    }
+    pub mod bytes_to_serial;
+    pub mod letters_to_bytes;
+    pub mod signals_to_letters;
 }
 
 /// Firmware
@@ -98,8 +58,17 @@ pub struct App<
     WireRx,
     WireTx,
 > {
-    write: ReadLetters<UsartReader<Serial, SerialRx, SerialTx, Clock>, Discard>,
-    read: UsartWriter<Serial, SerialRx, SerialTx, Clock>,
+    process: BytesToSerial<
+        LettersToBytes<
+            SignalsToLetters<
+                LettersToSignals<
+                    BytesToLetters<UsartReader<Serial, SerialRx, SerialTx, Clock>, Discard>,
+                >,
+            >,
+            Discard,
+        >,
+        UsartWriter<Serial, SerialRx, SerialTx, Clock>,
+    >,
     rx: WireRx,
     clock: time::Clock<TimerCallback<WireTx>>,
 }
@@ -119,38 +88,27 @@ impl<Serial: UsartOps<Atmega, SerialRx, SerialTx>, SerialRx, SerialTx, Clock, Wi
     ) -> (Self, Interrupts<WireTx>) {
         let (read, write) = serial.split();
 
-        let read = ReadLetters::new(read);
+        let read = LettersToSignals::new(BytesToLetters::new(read));
+
+        let process = BytesToSerial::new(write, LettersToBytes::new(SignalsToLetters::new(read)));
 
         let (clock, clock_interrupts) = time::Clock::new(timer, TimerCallback::new(tx));
 
-        (
-            Self {
-                write: read,
-                read: write,
-                rx,
-                clock,
-            },
-            (clock_interrupts,),
-        )
+        (Self { process, rx, clock }, (clock_interrupts,))
     }
 
     pub fn main_loop(&mut self) -> ! {
         self.clock.timer.try_set(NonZero::new(1).unwrap());
 
         loop {
-            let ch = loop {
-                match self.write.poll() {
-                    Ok(ch) => break ch,
-                    Err(nb::Error::WouldBlock) => (),
-                    Err(nb::Error::Other(err)) => match err {},
+            match self.process.poll() {
+                Ok(()) => (),
+                Err(nb::Error::Other(err)) => {
+                    // TODO: error handling
+
+                    drop(err);
                 }
-            };
-            loop {
-                match self.read.write(ch.char()) {
-                    Ok(()) => break,
-                    Err(nb::Error::WouldBlock) => (),
-                    Err(nb::Error::Other(err)) => match err {},
-                }
+                Err(nb::Error::WouldBlock) => (),
             }
         }
     }

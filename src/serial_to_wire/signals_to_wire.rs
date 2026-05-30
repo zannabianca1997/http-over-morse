@@ -1,3 +1,5 @@
+//! Write segments to the wire
+
 use core::{convert::Infallible, num::NonZero};
 
 use arduino_hal::prelude::_unwrap_infallible_UnwrapInfallible;
