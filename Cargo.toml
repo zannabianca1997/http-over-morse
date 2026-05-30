@@ -33,6 +33,8 @@ itertools = "0.14.0"
 proc-macro2 = "1.0.106"
 quote = "1.0.45"
 rand = "0.9"
+serde = { version = "1.0.228", features = ["derive"] }
+toml = "1.1.2"
 
 # Configure the build for minimal size - AVRs have very little program memory
 [profile.dev]

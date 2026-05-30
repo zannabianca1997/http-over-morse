@@ -1,7 +1,9 @@
 //! General encoding stuff
 
+use core::mem;
 use core::num::NonZeroU8;
 
+use crate::encoding::generated::DecodeState;
 use crate::time::MILLIS_FOR_TICK;
 use crate::time::Time;
 
@@ -65,7 +67,16 @@ impl Letter {
     }
 
     pub const fn symbols(self) -> &'static nunny::Slice<Symbol> {
-        generated::encode(self.char())
+        let state: DecodeState = unsafe {
+            // Safety: DecodeState has `#[repr(u8)]` on it, and all variants
+            // that corresponds to complete chars have their variant set to the
+            // right value
+            mem::transmute(self.0.get())
+        };
+        unsafe {
+            // Safety: all letters have a non-empty list of symbols
+            nunny::Slice::new_unchecked(state.symbols())
+        }
     }
 }
 

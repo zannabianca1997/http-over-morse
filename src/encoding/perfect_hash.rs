@@ -9,7 +9,6 @@ pub struct Hasher {
 }
 
 impl Hasher {
-    #[inline(always)]
     pub const fn hash(&self, value: u8) -> u8 {
         (value as u16)
             .wrapping_mul(self.multiplier)
