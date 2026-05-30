@@ -1,19 +1,14 @@
 //! General encoding stuff
 
+use core::hash::Hash;
+use core::hash::Hasher;
 use core::num::NonZeroU8;
 
 use crate::time::MILLIS_FOR_TICK;
 use crate::time::Time;
 
-/// Symbol on the wire
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Symbol {
-    /// A dot
-    DOT,
-    /// A line
-    LINE,
-}
-pub use Symbol::*;
+mod symbol;
+pub use symbol::*;
 
 pub const DOT_LENGTH: Time = (333 / MILLIS_FOR_TICK) as Time;
 pub const LINE_LENGTH: Time = 3 * DOT_LENGTH;

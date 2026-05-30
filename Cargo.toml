@@ -19,6 +19,7 @@ embedded-hal = "1.0.0"
 nb = "1.1.0"
 nunny = { version = "0.2.2", default-features = false }
 panic-halt = "1.0.0"
+phf = { version = "0.13.1", default-features = false }
 ufmt = "0.2.0"
 
 [dependencies.arduino-hal]
@@ -42,5 +43,7 @@ codegen-units = 1
 [build-dependencies]
 cargo-emit = "0.2.1"
 itertools = "0.14.0"
+phf = { version = "0.13.1", default-features = false }
+phf_codegen = "0.13.1"
 proc-macro2 = "1.0.106"
 quote = "1.0.45"

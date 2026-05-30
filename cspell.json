@@ -4,6 +4,7 @@
     "USART",
     "atmega",
     "nunny",
-    "Uninit"
+    "Uninit",
+    "supersequence"
   ]
 }

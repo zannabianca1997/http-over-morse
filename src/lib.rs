@@ -1,6 +1,8 @@
 #![no_std]
 #![deny(unsafe_op_in_unsafe_fn)]
-#![feature(cold_path)]
+// Needed for slicing the static storage
+#![feature(const_trait_impl)]
+#![feature(const_index)]
 
 use core::num::NonZero;
 
