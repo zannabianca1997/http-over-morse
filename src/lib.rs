@@ -14,16 +14,13 @@ use arduino_hal::{
 };
 
 use crate::{
-    process::Process,
+    process::{PipeToWriter, Process},
     serial_to_wire::{
         bytes_to_letters::BytesToLetters, letters_to_signals::LettersToSignals,
         signals_to_wire::TimerCallback,
     },
     strategies::Discard,
-    wire_to_serial::{
-        bytes_to_serial::BytesToSerial, letters_to_bytes::LettersToBytes,
-        signals_to_letters::SignalsToLetters,
-    },
+    wire_to_serial::{letters_to_bytes::LettersToBytes, signals_to_letters::SignalsToLetters},
 };
 
 mod encoding;
@@ -44,7 +41,6 @@ mod serial_to_wire {
 mod wire_to_serial {
     //! Processes for reading from the wire
 
-    pub mod bytes_to_serial;
     pub mod letters_to_bytes;
     pub mod signals_to_letters;
 }
@@ -58,7 +54,7 @@ pub struct App<
     WireRx,
     WireTx,
 > {
-    process: BytesToSerial<
+    process: PipeToWriter<
         LettersToBytes<
             SignalsToLetters<
                 LettersToSignals<
@@ -90,7 +86,7 @@ impl<Serial: UsartOps<Atmega, SerialRx, SerialTx>, SerialRx, SerialTx, Clock, Wi
 
         let read = LettersToSignals::new(BytesToLetters::new(read));
 
-        let process = BytesToSerial::new(write, LettersToBytes::new(SignalsToLetters::new(read)));
+        let process = PipeToWriter::new(write, LettersToBytes::new(SignalsToLetters::new(read)));
 
         let (clock, clock_interrupts) = time::Clock::new(timer, TimerCallback::new(tx));
 
