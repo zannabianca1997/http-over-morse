@@ -13,20 +13,80 @@ use arduino_hal::{
     usart::UsartOps,
 };
 
-use crate::{process::Process, write::wire::TimerCallback};
+use crate::{
+    process::Process,
+    strategies::Discard,
+    write::{letters::ReadLetters, wire::TimerCallback},
+};
 
 mod encoding;
 pub mod interrupts;
 mod process;
 mod time;
 
-mod write {
-    //! Writing processes
+mod strategies;
 
+mod write {
+    //! Processes for writing to wire
+
+    pub mod letters;
     pub mod wire;
 }
 mod read {
-    //! Reading processes
+    //! Processes for reading from the wire
+
+    pub mod serial {
+        use arduino_hal::prelude::_embedded_hal_serial_Write;
+
+        use crate::process::Process;
+
+        pub struct WriteToSerial<Inner, Serial> {
+            serial: Serial,
+            inner: Inner,
+            writing: Option<u8>,
+        }
+
+        impl<Inner, Serial> WriteToSerial<Inner, Serial> {
+            pub fn new(serial: Serial, inner: Inner) -> Self {
+                Self {
+                    serial,
+                    inner,
+                    writing: None,
+                }
+            }
+        }
+
+        impl<Inner, Serial> Process for WriteToSerial<Inner, Serial>
+        where
+            Inner: Process<Ok = u8>,
+            Serial: _embedded_hal_serial_Write<u8>,
+        {
+            type Ok = ();
+            type Err = Error<Inner::Err, Serial::Error>;
+
+            fn poll(&mut self) -> nb::Result<Self::Ok, Self::Err> {
+                loop {
+                    // Ensure the writing char is empty
+                    while let Some(writing) = self.writing {
+                        match self.serial.write(writing) {
+                            Ok(()) => self.writing = None,
+                            Err(err) => return Err(err.map(Error::Serial)),
+                        }
+                    }
+                    // Get a new char to write
+                    match self.inner.poll() {
+                        Ok(ch) => self.writing = Some(ch),
+                        Err(err) => return Err(err.map(Error::Inner)),
+                    }
+                }
+            }
+        }
+
+        pub enum Error<I, S> {
+            Inner(I),
+            Serial(S),
+        }
+    }
 }
 
 /// Firmware
@@ -38,8 +98,8 @@ pub struct App<
     WireRx,
     WireTx,
 > {
-    read: UsartReader<Serial, SerialRx, SerialTx, Clock>,
-    write: UsartWriter<Serial, SerialRx, SerialTx, Clock>,
+    write: ReadLetters<UsartReader<Serial, SerialRx, SerialTx, Clock>, Discard>,
+    read: UsartWriter<Serial, SerialRx, SerialTx, Clock>,
     rx: WireRx,
     clock: time::Clock<TimerCallback<WireTx>>,
 }
@@ -59,12 +119,14 @@ impl<Serial: UsartOps<Atmega, SerialRx, SerialTx>, SerialRx, SerialTx, Clock, Wi
     ) -> (Self, Interrupts<WireTx>) {
         let (read, write) = serial.split();
 
+        let read = ReadLetters::new(read);
+
         let (clock, clock_interrupts) = time::Clock::new(timer, TimerCallback::new(tx));
 
         (
             Self {
-                read,
-                write,
+                write: read,
+                read: write,
                 rx,
                 clock,
             },
@@ -74,16 +136,17 @@ impl<Serial: UsartOps<Atmega, SerialRx, SerialTx>, SerialRx, SerialTx, Clock, Wi
 
     pub fn main_loop(&mut self) -> ! {
         self.clock.timer.try_set(NonZero::new(1).unwrap());
+
         loop {
             let ch = loop {
-                match self.read.poll() {
+                match self.write.poll() {
                     Ok(ch) => break ch,
                     Err(nb::Error::WouldBlock) => (),
                     Err(nb::Error::Other(err)) => match err {},
                 }
             };
             loop {
-                match self.write.write(ch) {
+                match self.read.write(ch.char()) {
                     Ok(()) => break,
                     Err(nb::Error::WouldBlock) => (),
                     Err(nb::Error::Other(err)) => match err {},
