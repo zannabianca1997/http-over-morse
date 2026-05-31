@@ -181,7 +181,7 @@ fn decode(definitions: &[(u8, Range<usize>)], symbols_slice: &[Symbol]) -> Token
             name: format_ident!("Empty"),
             value: None,
             range: (0..0).into(),
-            variant: None,
+            variant: Some(0),
         },
     )]);
     for (value, range) in definitions {
@@ -218,7 +218,7 @@ fn decode(definitions: &[(u8, Range<usize>)], symbols_slice: &[Symbol]) -> Token
                 .values()
                 .filter_map(|StateData { variant, .. }| *variant),
         );
-        let mut highest_unassigned = 0u8;
+        let mut highest_unassigned = 1u8;
 
         for unassigned in states
             .values_mut()

@@ -4,19 +4,16 @@
 
 /// Symbol on the wire
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(u8)]
 pub enum Symbol {
     /// A dot
-    DOT,
+    DOT = 0b0000_0000,
     /// A line
-    LINE,
+    LINE = 0b1000_0000,
 }
 pub use Symbol::*;
 
 /// Mixes seven bytes and a symbol together
 pub(crate) const fn u7_and_symbol(u7: u8, symbol: Symbol) -> u8 {
-    (u7 << 1)
-        | match symbol {
-            DOT => 0,
-            LINE => 1,
-        }
+    u7 | (symbol as u8)
 }
