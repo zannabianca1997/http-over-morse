@@ -13,7 +13,7 @@ pub enum Symbol {
 pub use Symbol::*;
 
 /// Mixes seven bytes and a symbol together
-pub(super) const fn u7_and_symbol(u7: u8, symbol: Symbol) -> u8 {
+pub(crate) const fn u7_and_symbol(u7: u8, symbol: Symbol) -> u8 {
     (u7 << 1)
         | match symbol {
             DOT => 0,

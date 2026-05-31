@@ -1,18 +1,25 @@
 use std::{
-    cmp::{Reverse, min},
+    cmp::{Reverse, max, min},
     collections::{BTreeMap, BTreeSet},
-    env, fs, io,
+    env, fs,
+    hash::Hash,
+    io,
     iter::{self, once},
-    num::NonZeroU16,
+    num::{NonZero, NonZeroU8, NonZeroU16, NonZeroUsize},
     path::PathBuf,
     range::Range,
+    time::{Duration, Instant},
 };
 
 const MORSE_DEFINITIONS: &str = "src/morse.txt";
 
 #[path = "src/encoding/symbol.rs"]
 mod symbol;
-use rand::{SeedableRng, distr::StandardUniform, prelude::Rng};
+use rand::{
+    SeedableRng,
+    distr::{Distribution, StandardUniform, Uniform},
+    prelude::Rng,
+};
 use serde::{Deserialize, Serialize};
 use symbol::*;
 
@@ -243,7 +250,7 @@ fn decode(definitions: &[(u8, Range<usize>)], symbols_slice: &[Symbol]) -> Token
         quote! { #name = #variant }
     });
 
-    let (digest_lookup, digest_hasher) = {
+    let digest_static = {
         let mut lookup = BTreeMap::new();
 
         for (
@@ -264,9 +271,7 @@ fn decode(definitions: &[(u8, Range<usize>)], symbols_slice: &[Symbol]) -> Token
                 }) = states.get(&next_symbols)
                 {
                     let key = u7_and_symbol(current_state_variant, next);
-
                     let old = lookup.insert(key, next_name.to_string());
-
                     assert!(old.is_none())
                 }
             }
@@ -276,13 +281,18 @@ fn decode(definitions: &[(u8, Range<usize>)], symbols_slice: &[Symbol]) -> Token
             Hasher {
                 multiplier,
                 modulus,
+                size,
             },
             lookup,
-        ) = calculate_perfect_hash(PHTables::DIGEST, lookup);
+        ) = calculate_perfect_hash(PHTables::Digest, lookup);
 
         let modulus = modulus.get();
         let modulus = quote! { core::num::NonZeroU16::new(#modulus).unwrap() };
 
+        let size = size.get();
+        let size = quote! { core::num::NonZeroU16::new(#size).unwrap() };
+
+        let len = lookup.len();
         let lookup_items = lookup.into_vec().into_iter().map(|v| {
             if let Some(variant) = v {
                 let variant = format_ident!("{variant}");
@@ -292,28 +302,98 @@ fn decode(definitions: &[(u8, Range<usize>)], symbols_slice: &[Symbol]) -> Token
             }
         });
 
-        (
-            quote! { [ #( #lookup_items ),* ] },
-            quote! { Hasher { multiplier: #multiplier, modulus: #modulus } },
-        )
+        quote! {
+            static DIGEST_LOOKUP: [Option<DecodeState>; #len] = [ #( #lookup_items ),* ];
+            const DIGEST_HASHER: Hasher = Hasher { multiplier: #multiplier, modulus: #modulus, size: #size };
+        }
     };
-    let symbols_arms = states.iter().map(
-        |(
-            _,
-            StateData {
-                name,
-                range: Range { start, end },
-                ..
+    let symbols_start_static = {
+        let mut lookup = BTreeMap::new();
+
+        for StateData {
+            variant: current_state_variant,
+            range: Range { start, .. },
+            ..
+        } in states.values()
+        {
+            let key = current_state_variant.unwrap();
+            lookup.insert(key, *start as u8);
+        }
+
+        let (
+            Hasher {
+                multiplier,
+                modulus,
+                size,
             },
-        )| {
-            quote! { Self::#name => &SYMBOLS_SLICE[ #start .. #end  ]}
-        },
-    );
+            lookup,
+        ) = calculate_perfect_hash(PHTables::SymbolsStart, lookup);
+
+        let modulus = modulus.get();
+        let modulus = quote! { core::num::NonZeroU16::new(#modulus).unwrap() };
+
+        let size = size.get();
+        let size = quote! { core::num::NonZeroU16::new(#size).unwrap() };
+
+        let len = lookup.len();
+        let lookup_items = lookup
+            .into_vec()
+            .into_iter()
+            .map(|v| Literal::u8_unsuffixed(v.unwrap_or(0)));
+
+        quote! {
+            static SYMBOLS_START_LOOKUP: [u8; #len] = [ #( #lookup_items ),* ];
+            const SYMBOLS_START_HASHER: Hasher = Hasher { multiplier: #multiplier, modulus: #modulus, size: #size };
+        }
+    };
+    let symbols_end_static = {
+        let mut lookup = BTreeMap::new();
+
+        for StateData {
+            variant: current_state_variant,
+            range: Range { end, .. },
+            ..
+        } in states.values()
+        {
+            let key = current_state_variant.unwrap();
+            lookup.insert(key, *end as u8);
+        }
+
+        let (
+            Hasher {
+                multiplier,
+                modulus,
+                size,
+            },
+            lookup,
+        ) = calculate_perfect_hash(PHTables::SymbolsEnd, lookup);
+
+        let modulus = modulus.get();
+        let modulus = quote! { core::num::NonZeroU16::new(#modulus).unwrap() };
+
+        let size = size.get();
+        let size = quote! { core::num::NonZeroU16::new(#size).unwrap() };
+
+        let len = lookup.len();
+        let lookup_items = lookup
+            .into_vec()
+            .into_iter()
+            .map(|v| Literal::u8_unsuffixed(v.unwrap_or(0)));
+
+        quote! {
+            static SYMBOLS_END_LOOKUP: [u8; #len] = [ #( #lookup_items ),* ];
+            const SYMBOLS_END_HASHER: Hasher = Hasher { multiplier: #multiplier, modulus: #modulus, size: #size };
+        }
+    };
     let not_finals = states
         .values()
         .filter_map(|StateData { name, value, .. }| value.is_none().then_some(name));
 
     quote! {
+        #digest_static
+        #symbols_start_static
+        #symbols_end_static
+
         #[derive(Clone, Copy)]
         #[repr(u8)]
         pub(super) enum DecodeState {
@@ -330,13 +410,13 @@ fn decode(definitions: &[(u8, Range<usize>)], symbols_slice: &[Symbol]) -> Token
             }
 
             pub const fn symbols(&self) -> &'static [Symbol] {
-                match self {
-                    #( #symbols_arms ),*
-                }
+                let start = SYMBOLS_START_LOOKUP[SYMBOLS_START_HASHER.hash(*self as u8) as usize] as usize;
+                let end = SYMBOLS_END_LOOKUP[SYMBOLS_END_HASHER.hash(*self as u8) as usize] as usize;
+                &SYMBOLS_SLICE[start..end]
             }
 
             pub const fn digest(self, s: Symbol) -> Option<Self> {
-                ( #digest_lookup )[ ( #digest_hasher ) .hash( u7_and_symbol(self as u8, s) ) as usize ]
+                DIGEST_LOOKUP[ DIGEST_HASHER.hash( u7_and_symbol(self as u8, s) ) as usize ]
             }
 
             pub const fn finish(self) -> Option<u8> {
@@ -353,7 +433,9 @@ type RNG = chacha8rand::ChaCha8Rand;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 enum PHTables {
-    DIGEST,
+    Digest,
+    SymbolsStart,
+    SymbolsEnd,
 }
 
 const fn default_seed() -> <RNG as SeedableRng>::Seed {
@@ -361,9 +443,13 @@ const fn default_seed() -> <RNG as SeedableRng>::Seed {
     *b"\x42\x0e\x9a\x74\x81\x86\x1d\xe6\xde\x5e\xb8\x30\xe8\x68\xe5\x48\x20\x9d\x11\x01\x3b\xb3\xe9\xbe\x60\xaf\x1c\x36\x6b\xd0\x13\x99"
 }
 
-const fn default_max_load() -> f32 {
+fn default_max_load() -> BTreeMap<PHTables, f32> {
     // Chosen by compilation times
-    1.5
+    BTreeMap::from_iter([
+        (PHTables::Digest, 1.5),
+        (PHTables::SymbolsStart, 2.5),
+        (PHTables::SymbolsEnd, 3.),
+    ])
 }
 
 fn seed_to_hex<S: serde::Serializer>(seed: &[u8; 32], serializer: S) -> Result<S::Ok, S::Error> {
@@ -413,7 +499,7 @@ struct TableCacheInfo {
     )]
     seed: <RNG as SeedableRng>::Seed,
     #[serde(default = "default_max_load")]
-    max_load: f32,
+    max_load: BTreeMap<PHTables, f32>,
     #[serde(flatten)]
     cached: BTreeMap<PHTables, TableCacheEntry>,
 }
@@ -422,9 +508,9 @@ struct TableCacheInfo {
 struct TableCacheEntry {
     values: BTreeMap<String, toml::Value>,
     max_load: f32,
-    size: u16,
     multiplier: u16,
     modulus: NonZeroU16,
+    size: NonZeroU16,
 }
 
 impl TableCacheInfo {
@@ -454,7 +540,7 @@ impl TableCacheInfo {
 /// Calculate a perfect hash for a lookup table
 ///
 /// Returns the hasher and the size of the array (the maximum mapped + 1)
-fn calculate_perfect_hash<T: Clone + Eq + Serialize>(
+fn calculate_perfect_hash<T: Clone + Eq + Serialize + Hash>(
     table: PHTables,
     values: BTreeMap<u8, T>,
 ) -> (Hasher, Box<[Option<T>]>) {
@@ -464,9 +550,11 @@ fn calculate_perfect_hash<T: Clone + Eq + Serialize>(
 
     let mut cache_info = TableCacheInfo::load();
 
+    let max_load = *cache_info.max_load.get(&table).unwrap_or(&3.);
+
     if !calc_hash {
         if let Some(cached) = cache_info.cached.get(&table) {
-            if cached.max_load <= cache_info.max_load {
+            if cached.max_load <= max_load {
                 let current = values
                     .iter()
                     .map(|(&k, v)| (k.to_string(), toml::Value::try_from(v.clone()).unwrap()))
@@ -476,9 +564,10 @@ fn calculate_perfect_hash<T: Clone + Eq + Serialize>(
                     let hasher = Hasher {
                         multiplier: cached.multiplier,
                         modulus: cached.modulus,
+                        size: cached.size,
                     };
                     let mut table_data: Box<[Option<T>]> = iter::from_fn(|| Some(None))
-                        .take(cached.size as usize)
+                        .take(cached.size.get() as usize)
                         .collect();
                     for (key, value) in values {
                         table_data[hasher.hash(key) as usize] = Some(value);
@@ -501,48 +590,76 @@ fn calculate_perfect_hash<T: Clone + Eq + Serialize>(
         cargo_emit::warning!("Recalculating perfect hasher - CALC_HASHER set")
     }
 
-    // Cache miss — start search from a null hasher
-    let mut best_hasher = Hasher {
-        multiplier: 1,
-        modulus: NonZeroU16::new(1).unwrap(),
-    };
-    let mut best_size: usize = *values.keys().max().unwrap_or(&0) as usize + 1;
+    // Minimum possible size - all distinct values
+    let min_size = values.values().unique().count();
+    // Max acceptable size - some multiplier of the minimum
+    let max_size = (min_size as f32 * max_load).floor() as usize;
 
-    let target = (values.len() as f32 * cache_info.max_load).floor() as usize;
+    println!("Limits are {} .. {}", min_size, max_size);
 
-    let mut hashers = RNG::new(&cache_info.seed)
-        .sample_iter::<(u16, NonZeroU16), _>(StandardUniform)
-        .map(|(multiplier, modulus)| Hasher {
-            multiplier,
-            modulus,
-        });
+    struct HasherDistr(StandardUniform, StandardUniform, Uniform<u16>);
 
-    'hashers: while best_size > target {
+    impl HasherDistr {
+        fn new(size_range: Range<NonZeroU16>) -> Self {
+            Self(
+                StandardUniform,
+                StandardUniform,
+                Uniform::new(size_range.start.get(), size_range.end.get()).unwrap(),
+            )
+        }
+    }
+
+    impl Distribution<Hasher> for HasherDistr {
+        fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Hasher {
+            Hasher {
+                multiplier: self.0.sample(rng),
+                modulus: self.1.sample(rng),
+                size: NonZero::new(self.2.sample(rng)).unwrap(),
+            }
+        }
+    }
+
+    let mut hashers = RNG::new(&cache_info.seed).sample_iter::<Hasher, _>(HasherDistr::new(
+        (NonZero::new(min_size as _).unwrap()..NonZero::new(max_size as _).unwrap()).into(),
+    ));
+
+    let search_start = Instant::now();
+    let mut checked = 0usize;
+
+    let best_hasher = 'hashers: loop {
+        if search_start.elapsed() > Duration::from_secs(30) {
+            panic!("Hasher search taking too long! (checked {checked} hashers)")
+        }
+
         let hasher = hashers.next().unwrap();
-        let mut size = 0;
 
-        let mut mapped_values: [Option<&T>; 256] = [None; _];
+        let mut mapped_values: BTreeMap<u16, &T> = BTreeMap::new();
 
         for (key, value) in &values {
             let mapped = hasher.hash(*key);
 
-            let req_size = mapped as usize + 1;
-            if req_size >= best_size {
-                continue 'hashers;
-            }
-            size = size.max(req_size);
+            if mapped_values
+                .get(&mapped)
+                .is_some_and(|mapped| mapped != &value)
+            {
+                checked += 1;
 
-            if mapped_values[mapped as usize].is_some_and(|mapped| mapped != value) {
+                // Collision with different values, this hasher is no good
                 continue 'hashers;
             }
-            mapped_values[mapped as usize] = Some(value);
+            mapped_values.insert(mapped, value);
         }
 
-        best_hasher = hasher;
-        best_size = size;
-    }
+        // Found a good hasher
+        break hasher;
+    };
 
-    let achieved_max_load = best_size as f32 / values.len() as f32;
+    println!(
+        "Found best hasher: mul: {} mod: {} siz: {}",
+        best_hasher.multiplier, best_hasher.modulus, best_hasher.size
+    );
+
+    let achieved_max_load = best_hasher.size.get() as f32 / min_size as f32;
     cache_info.cached.insert(
         table,
         TableCacheEntry {
@@ -551,14 +668,16 @@ fn calculate_perfect_hash<T: Clone + Eq + Serialize>(
                 .map(|(&k, v)| (k.to_string(), toml::Value::try_from(v.clone()).unwrap()))
                 .collect(),
             max_load: achieved_max_load,
-            size: best_size as u16,
+            size: best_hasher.size,
             multiplier: best_hasher.multiplier,
             modulus: best_hasher.modulus,
         },
     );
     cache_info.save();
 
-    let mut table_data: Box<[Option<T>]> = iter::from_fn(|| Some(None)).take(best_size).collect();
+    let mut table_data: Box<[Option<T>]> = iter::from_fn(|| Some(None))
+        .take(best_hasher.size.get() as usize)
+        .collect();
 
     for (key, value) in values {
         table_data[best_hasher.hash(key) as usize] = Some(value);

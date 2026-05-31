@@ -6,12 +6,15 @@ use core::num::NonZeroU16;
 pub struct Hasher {
     pub multiplier: u16,
     pub modulus: NonZeroU16,
+    pub size: NonZeroU16,
 }
 
 impl Hasher {
-    pub const fn hash(&self, value: u8) -> u8 {
+    #[inline(always)]
+    pub const fn hash(&self, value: u8) -> u16 {
         (value as u16)
             .wrapping_mul(self.multiplier)
-            .wrapping_rem(self.modulus.get()) as u8
+            .wrapping_rem(self.modulus.get())
+            .wrapping_rem(self.size.get())
     }
 }
