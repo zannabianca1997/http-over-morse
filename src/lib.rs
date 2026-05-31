@@ -33,6 +33,9 @@ pub mod interrupts;
 mod process;
 mod segments;
 mod time;
+mod utils {
+    pub mod ringbuf;
+}
 
 mod strategies;
 
