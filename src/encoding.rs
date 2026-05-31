@@ -89,7 +89,7 @@ impl Letter {
             // Safety: DecodeState has `#[repr(u8)]` on it, and all variants
             // that corresponds to complete chars have their variant set to the
             // right value
-            mem::transmute(self.0.get())
+            mem::transmute(self.char())
         };
         unsafe {
             // Safety: all letters have a non-empty list of symbols

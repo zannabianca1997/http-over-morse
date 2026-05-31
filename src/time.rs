@@ -4,7 +4,8 @@ use core::num::NonZero;
 
 use arduino_hal::pac::TC0;
 
-pub use timer::TimerCallback;
+pub use stopwatch::Stopwatch;
+pub use timer::{Timer, TimerCallback};
 
 /// Type for time calculations
 pub type Time = usize;
@@ -19,8 +20,8 @@ const TIMER_COUNTS: u8 = 125;
 pub const MILLIS_FOR_TICK: NonZero<u32> = tc0::millis_per_tick(TIMER_COUNTS, PRESCALE);
 
 pub struct Clock<TCb> {
-    pub timer: timer::Timer<TCb>,
-    pub stopwatch: stopwatch::Stopwatch,
+    pub timer: Timer<TCb>,
+    pub stopwatch: Stopwatch,
 }
 
 pub type Interrupts<TCb> = (timer::Interrupts<TCb>, stopwatch::Interrupts);

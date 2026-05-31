@@ -1,4 +1,4 @@
-use core::{num::NonZero, slice::SliceIndex};
+use core::num::NonZero;
 
 use embedded_hal::digital::PinState;
 

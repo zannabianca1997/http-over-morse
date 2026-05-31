@@ -1,6 +1,6 @@
 #![no_std]
 #![deny(unsafe_op_in_unsafe_fn)]
-// Needed for slicing the static storage
+// Needed for slicing the static storage in a const way
 #![feature(const_trait_impl)]
 #![feature(const_index)]
 
