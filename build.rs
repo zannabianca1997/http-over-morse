@@ -238,6 +238,66 @@ fn decode(definitions: &[(u8, Range<usize>)], symbols_slice: &[Symbol]) -> Token
     let states = states;
     assert!(states.values().all(|v| v.variant.is_some_and(|v| v < 128)));
 
+    fn generate_ph_static<T>(
+        lookup_name: &str,
+        hasher_name: &str,
+        type_expr: TokenStream,
+        to_token: impl Fn(Option<T>) -> TokenStream,
+        (hash_result, lookup): (Hasher, Box<[Option<T>]>),
+    ) -> TokenStream {
+        let lookup_ident = format_ident!("{lookup_name}");
+        let hasher_ident = format_ident!("{hasher_name}");
+        let len = lookup.len();
+        let lookup_items = lookup.into_vec().into_iter().map(to_token);
+        let Hasher {
+            multiplier,
+            modulus,
+            size,
+        } = hash_result;
+        let modulus = {
+            let m = modulus.get();
+            quote! { core::num::NonZeroU16::new(#m).unwrap() }
+        };
+        let size = {
+            let s = size.get();
+            quote! { core::num::NonZeroU16::new(#s).unwrap() }
+        };
+        quote! {
+            static #lookup_ident: [#type_expr; #len] = [ #( #lookup_items ),* ];
+            const #hasher_ident: Hasher = Hasher { multiplier: #multiplier, modulus: #modulus, size: #size };
+        }
+    }
+
+    fn generate_symbol_bounds_static(
+        states: &BTreeMap<Vec<Symbol>, StateData>,
+        table_variant: PHTables,
+        lookup_name: &str,
+        hasher_name: &str,
+        bound: impl Fn(&Range<usize>) -> u8,
+    ) -> TokenStream {
+        let mut lookup = BTreeMap::new();
+        for StateData {
+            variant: current_state_variant,
+            range,
+            ..
+        } in states.values()
+        {
+            let key = current_state_variant.unwrap();
+            lookup.insert(key, bound(range));
+        }
+        let result = calculate_perfect_hash(table_variant, lookup);
+        generate_ph_static(
+            lookup_name,
+            hasher_name,
+            quote! { u8 },
+            |v| {
+                let v = Literal::u8_unsuffixed(v.unwrap_or(0));
+                quote! { #v }
+            },
+            result,
+        )
+    }
+
     let variants = states.values().map(|v| {
         let name = &v.name;
         let variant = v.variant.unwrap();
@@ -277,114 +337,36 @@ fn decode(definitions: &[(u8, Range<usize>)], symbols_slice: &[Symbol]) -> Token
             }
         }
 
-        let (
-            Hasher {
-                multiplier,
-                modulus,
-                size,
+        let result = calculate_perfect_hash(PHTables::Digest, lookup);
+        generate_ph_static(
+            "DIGEST_LOOKUP",
+            "DIGEST_HASHER",
+            quote! { Option<DecodeState> },
+            |v| {
+                if let Some(variant) = v {
+                    let variant = format_ident!("{variant}");
+                    quote! { Some( DecodeState :: #variant ) }
+                } else {
+                    quote! { None }
+                }
             },
-            lookup,
-        ) = calculate_perfect_hash(PHTables::Digest, lookup);
-
-        let modulus = modulus.get();
-        let modulus = quote! { core::num::NonZeroU16::new(#modulus).unwrap() };
-
-        let size = size.get();
-        let size = quote! { core::num::NonZeroU16::new(#size).unwrap() };
-
-        let len = lookup.len();
-        let lookup_items = lookup.into_vec().into_iter().map(|v| {
-            if let Some(variant) = v {
-                let variant = format_ident!("{variant}");
-                quote! { Some( DecodeState :: #variant ) }
-            } else {
-                quote! { None }
-            }
-        });
-
-        quote! {
-            static DIGEST_LOOKUP: [Option<DecodeState>; #len] = [ #( #lookup_items ),* ];
-            const DIGEST_HASHER: Hasher = Hasher { multiplier: #multiplier, modulus: #modulus, size: #size };
-        }
+            result,
+        )
     };
-    let symbols_start_static = {
-        let mut lookup = BTreeMap::new();
-
-        for StateData {
-            variant: current_state_variant,
-            range: Range { start, .. },
-            ..
-        } in states.values()
-        {
-            let key = current_state_variant.unwrap();
-            lookup.insert(key, *start as u8);
-        }
-
-        let (
-            Hasher {
-                multiplier,
-                modulus,
-                size,
-            },
-            lookup,
-        ) = calculate_perfect_hash(PHTables::SymbolsStart, lookup);
-
-        let modulus = modulus.get();
-        let modulus = quote! { core::num::NonZeroU16::new(#modulus).unwrap() };
-
-        let size = size.get();
-        let size = quote! { core::num::NonZeroU16::new(#size).unwrap() };
-
-        let len = lookup.len();
-        let lookup_items = lookup
-            .into_vec()
-            .into_iter()
-            .map(|v| Literal::u8_unsuffixed(v.unwrap_or(0)));
-
-        quote! {
-            static SYMBOLS_START_LOOKUP: [u8; #len] = [ #( #lookup_items ),* ];
-            const SYMBOLS_START_HASHER: Hasher = Hasher { multiplier: #multiplier, modulus: #modulus, size: #size };
-        }
-    };
-    let symbols_end_static = {
-        let mut lookup = BTreeMap::new();
-
-        for StateData {
-            variant: current_state_variant,
-            range: Range { end, .. },
-            ..
-        } in states.values()
-        {
-            let key = current_state_variant.unwrap();
-            lookup.insert(key, *end as u8);
-        }
-
-        let (
-            Hasher {
-                multiplier,
-                modulus,
-                size,
-            },
-            lookup,
-        ) = calculate_perfect_hash(PHTables::SymbolsEnd, lookup);
-
-        let modulus = modulus.get();
-        let modulus = quote! { core::num::NonZeroU16::new(#modulus).unwrap() };
-
-        let size = size.get();
-        let size = quote! { core::num::NonZeroU16::new(#size).unwrap() };
-
-        let len = lookup.len();
-        let lookup_items = lookup
-            .into_vec()
-            .into_iter()
-            .map(|v| Literal::u8_unsuffixed(v.unwrap_or(0)));
-
-        quote! {
-            static SYMBOLS_END_LOOKUP: [u8; #len] = [ #( #lookup_items ),* ];
-            const SYMBOLS_END_HASHER: Hasher = Hasher { multiplier: #multiplier, modulus: #modulus, size: #size };
-        }
-    };
+    let symbols_start_static = generate_symbol_bounds_static(
+        &states,
+        PHTables::SymbolsStart,
+        "SYMBOLS_START_LOOKUP",
+        "SYMBOLS_START_HASHER",
+        |range| range.start as u8,
+    );
+    let symbols_end_static = generate_symbol_bounds_static(
+        &states,
+        PHTables::SymbolsEnd,
+        "SYMBOLS_END_LOOKUP",
+        "SYMBOLS_END_HASHER",
+        |range| range.end as u8,
+    );
     let not_finals = states
         .values()
         .filter_map(|StateData { name, value, .. }| value.is_none().then_some(name));
