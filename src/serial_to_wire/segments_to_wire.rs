@@ -21,7 +21,13 @@ impl<Tx> TimerCallback<Tx> {
     }
 }
 
-const TICKS: NonZero<Time> = NonZero::new((1000 / MILLIS_FOR_TICK) as Time).unwrap();
+const TICKS: NonZero<Time> = NonZero::new(
+    NonZero::new(1000u32)
+        .unwrap()
+        .div_ceil(MILLIS_FOR_TICK)
+        .get() as Time,
+)
+.unwrap();
 
 impl<Tx> crate::time::TimerCallback for TimerCallback<Tx>
 where

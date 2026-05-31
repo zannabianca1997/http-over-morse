@@ -1,3 +1,5 @@
+use core::num::NonZero;
+
 use arduino_hal::pac::{TC0, tc0::tccr0b::CS0_A};
 
 pub enum Prescale {
@@ -54,13 +56,15 @@ pub(super) fn init(
     )
 }
 
-pub const fn millis_per_tick(timer_counts: u8, prescaler: Prescale) -> u32 {
-    (match prescaler {
+pub const fn millis_per_tick(timer_counts: u8, prescaler: Prescale) -> NonZero<u32> {
+    let value = (match prescaler {
         Prescale::Direct => 1,
         Prescale::Prescale8 => 8,
         Prescale::Prescale64 => 64,
         Prescale::Prescale256 => 256,
         Prescale::Prescale1024 => 1024,
     }) * timer_counts as u32
-        / 16000
+        / 16000;
+
+    NonZero::new(value).unwrap()
 }

@@ -1,6 +1,7 @@
 //! General encoding stuff
 
 use core::mem;
+use core::num::NonZero;
 use core::num::NonZeroU8;
 
 use crate::encoding::generated::DecodeState;
@@ -12,8 +13,17 @@ pub use symbol::{DOT, LINE, Symbol};
 
 mod perfect_hash;
 
-pub const DOT_LENGTH: Time = (333 / MILLIS_FOR_TICK) as Time;
-pub const LINE_LENGTH: Time = 3 * DOT_LENGTH;
+/// Main knob for the encoding speed: number of millis in a single dot
+pub const MILLIS_DOT_LENGTH: NonZero<u32> = NonZero::new(128).unwrap();
+
+pub const DOT_LENGTH: NonZero<Time> = const {
+    let value = MILLIS_DOT_LENGTH.div_ceil(MILLIS_FOR_TICK).get();
+    if value > crate::segments::MAX_LENGTH.get() as _ {
+        panic!("Exceeded segment max length!")
+    }
+    NonZero::new(value as Time).unwrap()
+};
+pub const LINE_LENGTH: NonZero<Time> = time_multiple(DOT_LENGTH, 3);
 
 /// Space on the wire
 ///
@@ -29,9 +39,17 @@ pub enum Space {
 pub use Space::LETTER as LETTER_SPACE;
 pub use Space::WORD as WORD_SPACE;
 
-pub const SYMBOL_SPACE_LENGTH: Time = 1 * DOT_LENGTH;
-pub const LETTER_SPACE_LENGTH: Time = 3 * SYMBOL_SPACE_LENGTH;
-pub const WORD_SPACE_LENGTH: Time = 7 * SYMBOL_SPACE_LENGTH;
+pub const SYMBOL_SPACE_LENGTH: NonZero<Time> = time_multiple(DOT_LENGTH, 1);
+pub const LETTER_SPACE_LENGTH: NonZero<Time> = time_multiple(SYMBOL_SPACE_LENGTH, 3);
+pub const WORD_SPACE_LENGTH: NonZero<Time> = time_multiple(SYMBOL_SPACE_LENGTH, 7);
+
+const fn time_multiple(unit: NonZero<Time>, count: Time) -> NonZero<Time> {
+    let total = unit.checked_mul(NonZero::new(count).unwrap()).unwrap();
+    if total.get() > crate::segments::MAX_LENGTH.get() {
+        panic!("Exceeded segment max length!")
+    }
+    total
+}
 
 /// Any significative signal on the wire
 #[derive(Clone, Copy, PartialEq, Eq)]
