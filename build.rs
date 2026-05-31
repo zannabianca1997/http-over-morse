@@ -1,35 +1,32 @@
 use std::{
-    cmp::{Reverse, max, min},
+    cmp::{Reverse, min},
     collections::{BTreeMap, BTreeSet},
     env, fs,
     hash::Hash,
     io,
     iter::{self, once},
-    num::{NonZero, NonZeroU8, NonZeroU16, NonZeroUsize},
+    num::NonZeroU16,
     path::PathBuf,
     range::Range,
-    time::{Duration, Instant},
 };
+
+use itertools::Itertools;
+use proc_macro2::{Ident, Literal, TokenStream};
+use quote::{format_ident, quote};
+use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 
 const MORSE_DEFINITIONS: &str = "src/morse.txt";
 
 #[path = "src/encoding/symbol.rs"]
 mod symbol;
-use rand::{
-    SeedableRng,
-    distr::{Distribution, StandardUniform, Uniform, slice::Choose},
-    prelude::Rng,
-};
-use serde::{Deserialize, Serialize};
 use symbol::*;
 
 #[path = "src/encoding/perfect_hash.rs"]
 mod perfect_hash;
 use perfect_hash::*;
 
-use itertools::Itertools;
-use proc_macro2::{Ident, Literal, TokenStream};
-use quote::{format_ident, quote};
+use crate::primes::PRIMES;
 
 fn main() {
     cargo_emit::rerun_if_changed!(MORSE_DEFINITIONS);
@@ -411,8 +408,6 @@ fn decode(definitions: &[(u8, Range<usize>)], symbols_slice: &[Symbol]) -> Token
     }
 }
 
-type RNG = chacha8rand::ChaCha8Rand;
-
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 enum PHTables {
     Digest,
@@ -420,68 +415,8 @@ enum PHTables {
     SymbolsEnd,
 }
 
-const fn default_seed() -> <RNG as SeedableRng>::Seed {
-    // Chosen by fair dice roll
-    *b"\x42\x0e\x9a\x74\x81\x86\x1d\xe6\xde\x5e\xb8\x30\xe8\x68\xe5\x48\x20\x9d\x11\x01\x3b\xb3\xe9\xbe\x60\xaf\x1c\x36\x6b\xd0\x13\x99"
-}
-
-fn default_max_load() -> BTreeMap<PHTables, f32> {
-    // Chosen by compilation times
-    BTreeMap::from_iter([
-        (PHTables::Digest, 1.5),
-        (PHTables::SymbolsStart, 2.5),
-        (PHTables::SymbolsEnd, 2.),
-    ])
-}
-
-fn seed_to_hex<S: serde::Serializer>(seed: &[u8; 32], serializer: S) -> Result<S::Ok, S::Error> {
-    let mut hex = String::with_capacity(64);
-    for byte in seed {
-        use std::fmt::Write;
-        write!(&mut hex, "{:02x}", *byte).unwrap();
-    }
-    serializer.serialize_str(&hex)
-}
-
-fn seed_from_hex<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<[u8; 32], D::Error> {
-    use serde::de::Error;
-    let hex = String::deserialize(deserializer)?;
-    if hex.len() != 64 {
-        return Err(D::Error::custom(format!(
-            "hex seed must be 64 characters, got {}",
-            hex.len()
-        )));
-    }
-    let mut seed = [0u8; 32];
-    for (i, chunk) in hex.as_bytes().chunks(2).enumerate() {
-        let high = hex_char_to_nibble(chunk[0])
-            .map_err(|c| D::Error::custom(format!("invalid hex char: {}", c)))?;
-        let low = hex_char_to_nibble(chunk[1])
-            .map_err(|c| D::Error::custom(format!("invalid hex char: {}", c)))?;
-        seed[i] = high << 4 | low;
-    }
-    Ok(seed)
-}
-
-fn hex_char_to_nibble(c: u8) -> Result<u8, char> {
-    match c {
-        b'0'..=b'9' => Ok(c - b'0'),
-        b'a'..=b'f' => Ok(c - b'a' + 10),
-        b'A'..=b'F' => Ok(c - b'A' + 10),
-        _ => Err(c as char),
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 struct TableCacheInfo {
-    #[serde(
-        default = "default_seed",
-        serialize_with = "seed_to_hex",
-        deserialize_with = "seed_from_hex"
-    )]
-    seed: <RNG as SeedableRng>::Seed,
-    #[serde(default = "default_max_load")]
-    max_load: BTreeMap<PHTables, f32>,
     #[serde(flatten)]
     cached: BTreeMap<PHTables, TableCacheEntry>,
 }
@@ -489,7 +424,7 @@ struct TableCacheInfo {
 #[derive(Debug, Serialize, Deserialize)]
 struct TableCacheEntry {
     values: BTreeMap<String, toml::Value>,
-    max_load: f32,
+
     multiplier: u16,
     modulus: NonZeroU16,
     size: NonZeroU16,
@@ -524,7 +459,7 @@ mod primes;
 /// Calculate a perfect hash for a lookup table
 ///
 /// Returns the hasher and the size of the array (the maximum mapped + 1)
-fn calculate_perfect_hash<T: Clone + Eq + Serialize + Hash>(
+fn calculate_perfect_hash<T: Clone + Eq + Serialize + Hash + Sync>(
     table: PHTables,
     values: BTreeMap<u8, T>,
 ) -> (Hasher, Box<[Option<T>]>) {
@@ -534,37 +469,29 @@ fn calculate_perfect_hash<T: Clone + Eq + Serialize + Hash>(
 
     let mut cache_info = TableCacheInfo::load();
 
-    let max_load = *cache_info.max_load.get(&table).unwrap_or(&3.);
-
     if !calc_hash {
         if let Some(cached) = cache_info.cached.get(&table) {
-            if cached.max_load <= max_load {
-                let current = values
-                    .iter()
-                    .map(|(&k, v)| (k.to_string(), toml::Value::try_from(v.clone()).unwrap()))
-                    .collect::<BTreeMap<_, _>>();
+            let current = values
+                .iter()
+                .map(|(&k, v)| (k.to_string(), toml::Value::try_from(v.clone()).unwrap()))
+                .collect::<BTreeMap<_, _>>();
 
-                if current == cached.values {
-                    let hasher = Hasher {
-                        multiplier: cached.multiplier,
-                        modulus: cached.modulus,
-                        size: cached.size,
-                    };
-                    let mut table_data: Box<[Option<T>]> = iter::from_fn(|| Some(None))
-                        .take(cached.size.get() as usize)
-                        .collect();
-                    for (key, value) in values {
-                        table_data[hasher.hash(key) as usize] = Some(value);
-                    }
-                    return (hasher, table_data);
-                } else {
-                    cargo_emit::warning!(
-                        "Recalculating perfect hasher - `.phcache` entry refers to different values"
-                    )
+            if current == cached.values {
+                let hasher = Hasher {
+                    multiplier: cached.multiplier,
+                    modulus: cached.modulus,
+                    size: cached.size,
+                };
+                let mut table_data: Box<[Option<T>]> = iter::from_fn(|| Some(None))
+                    .take(cached.size.get() as usize)
+                    .collect();
+                for (key, value) in values {
+                    table_data[hasher.hash(key) as usize] = Some(value);
                 }
+                return (hasher, table_data);
             } else {
                 cargo_emit::warning!(
-                    "Recalculating perfect hasher - `.phcache` entry not satisfactory"
+                    "Recalculating perfect hasher - `.phcache` entry refers to different values"
                 )
             }
         } else {
@@ -576,82 +503,53 @@ fn calculate_perfect_hash<T: Clone + Eq + Serialize + Hash>(
 
     // Minimum possible size - all distinct values
     let min_size = values.values().unique().count();
-    // Max acceptable size - some multiplier of the minimum
-    let max_size = (min_size as f32 * max_load).floor() as usize;
-
-    println!("Limits are {} .. {}", min_size, max_size);
-
-    struct HasherDistr(StandardUniform, Choose<'static, u16>, Uniform<u16>);
-
-    impl HasherDistr {
-        fn new(size_range: Range<NonZeroU16>) -> Self {
-            Self(
-                StandardUniform,
-                Choose::new(&primes::PRIMES).unwrap(),
-                Uniform::new(size_range.start.get(), size_range.end.get()).unwrap(),
-            )
-        }
-    }
-
-    impl Distribution<Hasher> for HasherDistr {
-        fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Hasher {
-            Hasher {
-                multiplier: self.0.sample(rng),
-                modulus: NonZero::new(*self.1.sample(rng)).unwrap(),
-                size: NonZero::new(self.2.sample(rng)).unwrap(),
-            }
-        }
-    }
-
-    let mut hashers = RNG::new(&cache_info.seed).sample_iter::<Hasher, _>(HasherDistr::new(
-        (NonZero::new(min_size as _).unwrap()..NonZero::new(max_size as _).unwrap()).into(),
-    ));
-
-    let search_start = Instant::now();
-    let mut checked = 0usize;
-
-    let best_hasher = 'hashers: loop {
-        if search_start.elapsed() > Duration::from_secs(30) {
-            panic!("Hasher search taking too long! (checked {checked} hashers)")
-        }
-
-        let hasher = hashers.next().unwrap();
-
-        let mut mapped_values: BTreeMap<u16, &T> = BTreeMap::new();
-
-        for (key, value) in &values {
-            let mapped = hasher.hash(*key);
-
-            if mapped_values
-                .get(&mapped)
-                .is_some_and(|mapped| mapped != &value)
-            {
-                checked += 1;
-
-                // Collision with different values, this hasher is no good
-                continue 'hashers;
-            }
-            mapped_values.insert(mapped, value);
-        }
-
-        // Found a good hasher
-        break hasher;
-    };
-
-    println!(
-        "Found best hasher: mul: {} mod: {} siz: {}",
-        best_hasher.multiplier, best_hasher.modulus, best_hasher.size
+    assert!(
+        min_size < 256,
+        "Refusing to create tabled of more than 256 elements as the identity would be more efficient"
     );
 
-    let achieved_max_load = best_hasher.size.get() as f32 / min_size as f32;
+    // Moving the values to an array for faster iteration
+    let values: Vec<(u8, T)> = values.into_iter().collect();
+
+    let best_hasher = (min_size..=256).find_map(|size| {
+        (1..=u16::MAX)
+            .into_par_iter()
+            .flat_map(|multiplier| {
+                PRIMES.par_iter().rev().copied().map(move |modulus| Hasher {
+                    multiplier,
+                    modulus: NonZeroU16::new(modulus).unwrap(),
+                    size: NonZeroU16::new(size as u16).unwrap(),
+                })
+            })
+            .find_any(|hasher| {
+                let mut mapped_values: [Option<&T>; 256] = [None; 256];
+
+                for (key, value) in &values {
+                    let mapped = hasher.hash(*key);
+
+                    if mapped_values[mapped as usize].is_some_and(|mapped| mapped != value) {
+                        // Collision with different values, this hasher is no good
+                        return false;
+                    }
+                    mapped_values[mapped as usize] = Some(value);
+                }
+
+                // Found a good hasher
+                true
+            })
+    });
+
+    let Some(best_hasher) = best_hasher else {
+        panic!("No hasher found in search space for {table:?}");
+    };
+
     cache_info.cached.insert(
         table,
         TableCacheEntry {
             values: values
                 .iter()
-                .map(|(&k, v)| (k.to_string(), toml::Value::try_from(v.clone()).unwrap()))
+                .map(|(k, v)| (k.to_string(), toml::Value::try_from(v.clone()).unwrap()))
                 .collect(),
-            max_load: achieved_max_load,
             size: best_hasher.size,
             multiplier: best_hasher.multiplier,
             modulus: best_hasher.modulus,
