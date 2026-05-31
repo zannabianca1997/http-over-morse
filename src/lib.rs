@@ -7,12 +7,8 @@
 use core::convert::Infallible;
 
 use arduino_hal::{
-    hal::{
-        Atmega, Usart,
-        usart::{UsartReader, UsartWriter},
-    },
-    pac::TC0,
-    usart::UsartOps,
+    pac::{EXINT, TC0},
+    prelude::{_embedded_hal_serial_Read as Read, _embedded_hal_serial_Write as Write},
 };
 use embedded_hal::digital::OutputPin;
 
@@ -25,14 +21,18 @@ use crate::{
         signals_to_segments::SignalsToSegments,
     },
     strategies::Discard,
+    time::Stopwatch,
     wire_to_serial::{
-        letters_to_bytes::LettersToBytes, segments_to_signals::SegmentsToSignals,
+        letters_to_bytes::LettersToBytes,
+        segments_to_signals::SegmentsToSignals,
         signals_to_letters::SignalsToLetters,
+        wire_to_segments::{ListeningPinCallback, WireToSegments},
     },
 };
 
 mod encoding;
 pub mod interrupts;
+mod listening_pin;
 mod process;
 mod segments;
 mod time;
@@ -56,60 +56,93 @@ mod wire_to_serial {
     pub mod letters_to_bytes;
     pub mod segments_to_signals;
     pub mod signals_to_letters;
+    pub mod wire_to_segments;
 }
 
 /// Firmware
-pub struct App<
-    Serial: UsartOps<Atmega, SerialRx, SerialTx>,
-    SerialRx,
-    SerialTx,
-    Clock,
-    WireRx,
-    WireTx,
-> {
-    process: SegmentsToWire<
-        SignalsToSegments<
-            LettersToSignals<
-                BytesToLetters<UsartReader<Serial, SerialRx, SerialTx, Clock>, Discard>,
-            >,
-        >,
+pub struct App<SerialReader, SerialWriter, WireTx> {
+    serial_to_wire: SegmentsToWire<
+        SignalsToSegments<LettersToSignals<BytesToLetters<SerialReader, Discard>>>,
         WireTx,
     >,
-    _rx: WireRx,
+    wire_to_serial: PipeToWriter<
+        LettersToBytes<SignalsToLetters<SegmentsToSignals<WireToSegments>>, Discard>,
+        SerialWriter,
+    >,
 }
 
 /// Interrupts of the application
-pub type Interrupts<WireTx> = (time::Interrupts<TimerCallback<WireTx>>,);
+pub type Interrupts<WireTx> = (
+    time::Interrupts<TimerCallback<WireTx>>,
+    listening_pin::Interrupts<ListeningPinCallback>,
+);
 
-impl<Serial: UsartOps<Atmega, SerialRx, SerialTx>, SerialRx, SerialTx, Clock, WireRx, WireTx>
-    App<Serial, SerialRx, SerialTx, Clock, WireRx, WireTx>
-{
+impl<SerialReader, SerialWriter, WireTx> App<SerialReader, SerialWriter, WireTx> {
     /// Initialize the application
     pub fn new(
-        serial: Usart<Serial, SerialRx, SerialTx, Clock>,
-        rx: WireRx,
+        serial_reader: SerialReader,
+        serial_writer: SerialWriter,
+        external_interrupts: EXINT,
+        rx: listening_pin::Pin,
         tx: WireTx,
         timer: TC0,
     ) -> (Self, Interrupts<WireTx>) {
-        let (serial_read, _serial_write) = serial.split();
-        let (time::Clock { timer, .. }, clock_interrupts) =
-            time::Clock::new(timer, TimerCallback::new(tx));
+        // Setup the clock
+        let (
+            time::Clock {
+                timer,
+                stopwatch: Stopwatch { reset, overflow },
+            },
+            clock_interrupts,
+        ) = time::Clock::new(timer, TimerCallback::new(tx));
 
-        let process = SegmentsToWire::new(
-            SignalsToSegments::new(LettersToSignals::new(BytesToLetters::new(serial_read))),
-            timer,
+        // Setup the pin to listen
+        let (listening_pin, listening_pin_interrupts) = listening_pin::ListeningPin::new(
+            external_interrupts,
+            rx,
+            ListeningPinCallback::new(reset),
         );
 
-        (Self { process, _rx: rx }, (clock_interrupts,))
+        // Wire to serial
+        let wire_to_serial = PipeToWriter::new(
+            serial_writer,
+            LettersToBytes::new(SignalsToLetters::new(SegmentsToSignals::new(
+                WireToSegments::new(listening_pin, overflow),
+            ))),
+        );
+
+        // Serial to wire
+        let serial_to_wire = SegmentsToWire::new(
+            timer,
+            SignalsToSegments::new(LettersToSignals::new(BytesToLetters::new(serial_reader))),
+        );
+
+        (
+            Self {
+                serial_to_wire,
+                wire_to_serial,
+            },
+            (clock_interrupts, listening_pin_interrupts),
+        )
     }
 
     pub fn main_loop(&mut self) -> !
     where
         WireTx: OutputPin<Error = Infallible>,
+        SerialReader: Read<u8, Error = Infallible>,
+        SerialWriter: Write<u8, Error = Infallible>,
     {
         loop {
-            match self.process.poll() {
+            match self.serial_to_wire.poll() {
                 Err(nb::Error::WouldBlock) => (),
+            }
+            match self.wire_to_serial.poll() {
+                Err(nb::Error::WouldBlock) => (),
+                Err(nb::Error::Other(err)) => {
+                    // TODO: handle the errors somehow
+
+                    drop(err);
+                }
             }
         }
     }

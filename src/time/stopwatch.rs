@@ -9,20 +9,39 @@ use avr_device::interrupt::{CriticalSection, Mutex, free};
 use super::{Time, tc0::InitializedForStopwatch};
 
 pub struct Stopwatch {
-    _tc0: InitializedForStopwatch,
+    pub reset: StopwatchReset,
+    pub overflow: StopwatchOverflow,
 }
 
 impl Stopwatch {
     /// Initialize the timer
     pub(super) fn new(_tc0: InitializedForStopwatch) -> (Self, Interrupts) {
-        (Self { _tc0 }, Interrupts { _priv: () })
+        (
+            Self {
+                reset: StopwatchReset { _priv: () },
+                overflow: StopwatchOverflow { _priv: () },
+            },
+            Interrupts { _tc0 },
+        )
     }
+}
 
+pub struct StopwatchReset {
+    _priv: (),
+}
+
+impl StopwatchReset {
     /// Reset the timer
-    pub fn reset(&mut self) -> Time {
-        free(|cs| STOPWATCH.borrow(cs).replace(0))
+    pub fn reset(&mut self, cs: CriticalSection) -> Time {
+        STOPWATCH.borrow(cs).replace(0)
     }
+}
 
+pub struct StopwatchOverflow {
+    _priv: (),
+}
+
+impl StopwatchOverflow {
     /// Reset the timer if greater than some limit
     pub fn reset_if_greater(&mut self, threshold: Time) -> Option<Time> {
         free(|cs| {
@@ -37,7 +56,7 @@ impl Stopwatch {
 }
 
 pub struct Interrupts {
-    _priv: (),
+    _tc0: InitializedForStopwatch,
 }
 
 /// Stopwatch state

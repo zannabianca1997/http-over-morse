@@ -17,20 +17,13 @@ pub trait TimerCallback {
 }
 
 pub struct Timer<CB> {
-    _tc0: InitializedForTimer,
     _cb: PhantomData<CB>,
 }
 
 impl<CB> Timer<CB> {
     /// Initialize the timer
     pub(super) fn new(_tc0: InitializedForTimer, callback: CB) -> (Self, Interrupts<CB>) {
-        (
-            Self {
-                _tc0,
-                _cb: PhantomData,
-            },
-            Interrupts { callback },
-        )
+        (Self { _cb: PhantomData }, Interrupts { _tc0, callback })
     }
 
     /// Set the timer if not set
@@ -53,6 +46,7 @@ impl<CB> Timer<CB> {
 }
 
 pub struct Interrupts<CB> {
+    _tc0: InitializedForTimer,
     callback: CB,
 }
 

@@ -12,7 +12,7 @@ pub type Time = usize;
 
 mod tc0;
 
-mod stopwatch;
+pub mod stopwatch;
 mod timer;
 
 const PRESCALE: tc0::Prescale = tc0::Prescale::Prescale1024;

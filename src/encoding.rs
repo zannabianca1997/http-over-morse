@@ -14,7 +14,7 @@ pub use symbol::{DOT, LINE, Symbol};
 mod perfect_hash;
 
 /// Main knob for the encoding speed: number of millis in a single dot
-pub const MILLIS_DOT_LENGTH: NonZero<u32> = NonZero::new(128).unwrap();
+pub const MILLIS_DOT_LENGTH: NonZero<u32> = NonZero::new(8).unwrap();
 
 pub const DOT_LENGTH: NonZero<Time> = const {
     let value = MILLIS_DOT_LENGTH.div_ceil(MILLIS_FOR_TICK).get();
@@ -49,6 +49,19 @@ const fn time_multiple(unit: NonZero<Time>, count: Time) -> NonZero<Time> {
         panic!("Exceeded segment max length!")
     }
     total
+}
+
+pub const fn threshold(a: NonZero<Time>, b: NonZero<Time>) -> NonZero<Time> {
+    let mean = a
+        .checked_add(b.get())
+        .unwrap()
+        .div_ceil(NonZero::new(2).unwrap());
+
+    if mean.get() == a.get() || mean.get() == b.get() {
+        panic!("Cannot calculate threshold, range too tight")
+    }
+
+    mean
 }
 
 /// Any significative signal on the wire

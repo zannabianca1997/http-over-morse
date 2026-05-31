@@ -60,7 +60,7 @@ pub struct SegmentsToWire<Inner, Tx> {
 }
 
 impl<Inner, Tx> SegmentsToWire<Inner, Tx> {
-    pub fn new(inner: Inner, timer: Timer<TimerCallback<Tx>>) -> Self {
+    pub fn new(timer: Timer<TimerCallback<Tx>>, inner: Inner) -> Self {
         Self { inner, timer }
     }
 }

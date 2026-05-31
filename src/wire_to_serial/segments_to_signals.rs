@@ -11,25 +11,12 @@ use crate::{
         DOT_LENGTH, LETTER_SPACE, LETTER_SPACE_LENGTH, LINE_LENGTH, SYMBOL_SPACE_LENGTH,
         Signal::{self, Space, Symbol},
         Symbol::{DOT, LINE},
-        WORD_SPACE, WORD_SPACE_LENGTH,
+        WORD_SPACE, WORD_SPACE_LENGTH, threshold,
     },
     process::Process,
     segments::Segment,
     time::Time,
 };
-
-const fn threshold(a: NonZero<Time>, b: NonZero<Time>) -> NonZero<Time> {
-    let mean = a
-        .checked_add(b.get())
-        .unwrap()
-        .div_ceil(NonZero::new(2).unwrap());
-
-    if mean.get() == a.get() || mean.get() == b.get() {
-        panic!("Cannot calculate threshold, range too tight")
-    }
-
-    mean
-}
 
 const DOT_LINE_THRESHOLD: NonZero<Time> = threshold(DOT_LENGTH, LINE_LENGTH);
 

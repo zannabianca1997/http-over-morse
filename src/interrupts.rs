@@ -4,6 +4,7 @@ use avr_device::interrupt::{CriticalSection, Mutex, free};
 
 pub trait Interrupts {
     fn timer0compa(&mut self, _cs: CriticalSection) {}
+    fn int0(&mut self, _cs: CriticalSection) {}
 }
 
 impl Interrupts for () {}
@@ -14,6 +15,9 @@ where
     fn timer0compa(&mut self, cs: CriticalSection) {
         self.0.timer0compa(cs);
     }
+    fn int0(&mut self, cs: CriticalSection) {
+        self.0.int0(cs);
+    }
 }
 impl<A, B> Interrupts for (A, B)
 where
@@ -23,6 +27,10 @@ where
     fn timer0compa(&mut self, cs: CriticalSection) {
         self.0.timer0compa(cs);
         self.1.timer0compa(cs);
+    }
+    fn int0(&mut self, cs: CriticalSection) {
+        self.0.int0(cs);
+        self.1.int0(cs);
     }
 }
 
@@ -44,7 +52,7 @@ impl<I> InterruptStorage<I> {
 
     /// Init the interrupt storage
     ///
-    /// Safety: Must be called before interrupts are turned on.
+    /// Safety: Must be called exactly once, before interrupts are turned on.
     pub unsafe fn init(&self, interrupts: I) {
         free(|cs| {
             let storage = self.interrupts.borrow(cs);
@@ -63,29 +71,33 @@ impl<I> InterruptStorage<I> {
     /// Call an interrupt
     ///
     /// Safety: must be called _only_ from an interrupt.
-    /// [`InterruptStorage::init`] must have been called before. If the used
-    /// define their own interrupts, they must not call this function again.
+    /// [`InterruptStorage::init`] must have been called before. The body of the
+    /// function must be entirely composed of this function
     pub unsafe fn trigger<C: Caller>(&self)
     where
         I: Interrupts,
     {
-        free(|cs| {
-            let storage = self.interrupts.borrow(cs);
+        let cs = unsafe {
+            // Safety: per function contract, we are at the start of an
+            // interrupt. Interrupts are disabled at the start of an interrupt.
+            CriticalSection::new()
+        };
 
-            let storage = unsafe {
-                // Safety: as we are in a critical section, we are the only one
-                // with access. The reference will be dropped before the section
-                // ends.
-                &mut *storage.get()
-            };
+        let storage = self.interrupts.borrow(cs);
 
-            let storage = unsafe {
-                // Safety: per function contract,[`InterruptStorage::init`] was called.
-                storage.assume_init_mut()
-            };
+        let storage = unsafe {
+            // Safety: as we are in a critical section, we are the only one
+            // with access. The reference will be dropped before the section
+            // ends.
+            &mut *storage.get()
+        };
 
-            C::call(storage, cs);
-        })
+        let storage = unsafe {
+            // Safety: per function contract,[`InterruptStorage::init`] was called.
+            storage.assume_init_mut()
+        };
+
+        C::call(storage, cs);
     }
 }
 
@@ -102,5 +114,14 @@ impl sealed::Sealed for TIMER0_COMPA {}
 impl Caller for TIMER0_COMPA {
     fn call(interrupts: &mut impl Interrupts, cs: CriticalSection) {
         interrupts.timer0compa(cs);
+    }
+}
+
+#[allow(non_camel_case_types)]
+pub enum INT0 {}
+impl sealed::Sealed for INT0 {}
+impl Caller for INT0 {
+    fn call(interrupts: &mut impl Interrupts, cs: CriticalSection) {
+        interrupts.int0(cs);
     }
 }
