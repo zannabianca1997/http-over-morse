@@ -6,12 +6,12 @@ seed = "420e9a7481861de6de5eb830e868e548209d11013bb3e9be60af1c366bd01399"
 [max_load]
 Digest = 1.5
 SymbolsStart = 2.5
-SymbolsEnd = 3.0
+SymbolsEnd = 2.0
 
 [Digest]
 max_load = 1.4615384
-multiplier = 64998
-modulus = 34030
+multiplier = 305
+modulus = 51613
 size = 57
 
 [Digest.values]
@@ -56,10 +56,10 @@ size = 57
 7 = "LineLineLineLineLine"
 
 [SymbolsStart]
-max_load = 2.368421
-multiplier = 64892
-modulus = 65089
-size = 45
+max_load = 2.3157895
+multiplier = 64431
+modulus = 62633
+size = 44
 
 [SymbolsStart.values]
 0 = 0
@@ -104,10 +104,10 @@ size = 45
 90 = 8
 
 [SymbolsEnd]
-max_load = 2.875
-multiplier = 8564
-modulus = 61115
-size = 69
+max_load = 1.9583334
+multiplier = 1063
+modulus = 45691
+size = 47
 
 [SymbolsEnd.values]
 0 = 0

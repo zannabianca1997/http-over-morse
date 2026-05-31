@@ -17,7 +17,7 @@ const MORSE_DEFINITIONS: &str = "src/morse.txt";
 mod symbol;
 use rand::{
     SeedableRng,
-    distr::{Distribution, StandardUniform, Uniform},
+    distr::{Distribution, StandardUniform, Uniform, slice::Choose},
     prelude::Rng,
 };
 use serde::{Deserialize, Serialize};
@@ -430,7 +430,7 @@ fn default_max_load() -> BTreeMap<PHTables, f32> {
     BTreeMap::from_iter([
         (PHTables::Digest, 1.5),
         (PHTables::SymbolsStart, 2.5),
-        (PHTables::SymbolsEnd, 3.),
+        (PHTables::SymbolsEnd, 2.),
     ])
 }
 
@@ -519,6 +519,8 @@ impl TableCacheInfo {
     }
 }
 
+mod primes;
+
 /// Calculate a perfect hash for a lookup table
 ///
 /// Returns the hasher and the size of the array (the maximum mapped + 1)
@@ -579,13 +581,13 @@ fn calculate_perfect_hash<T: Clone + Eq + Serialize + Hash>(
 
     println!("Limits are {} .. {}", min_size, max_size);
 
-    struct HasherDistr(StandardUniform, StandardUniform, Uniform<u16>);
+    struct HasherDistr(StandardUniform, Choose<'static, u16>, Uniform<u16>);
 
     impl HasherDistr {
         fn new(size_range: Range<NonZeroU16>) -> Self {
             Self(
                 StandardUniform,
-                StandardUniform,
+                Choose::new(&primes::PRIMES).unwrap(),
                 Uniform::new(size_range.start.get(), size_range.end.get()).unwrap(),
             )
         }
@@ -595,7 +597,7 @@ fn calculate_perfect_hash<T: Clone + Eq + Serialize + Hash>(
         fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Hasher {
             Hasher {
                 multiplier: self.0.sample(rng),
-                modulus: self.1.sample(rng),
+                modulus: NonZero::new(*self.1.sample(rng)).unwrap(),
                 size: NonZero::new(self.2.sample(rng)).unwrap(),
             }
         }
