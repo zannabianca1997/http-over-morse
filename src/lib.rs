@@ -4,7 +4,7 @@
 #![feature(const_trait_impl)]
 #![feature(const_index)]
 
-use core::num::NonZero;
+use core::convert::Infallible;
 
 use arduino_hal::{
     hal::{
@@ -14,12 +14,15 @@ use arduino_hal::{
     pac::TC0,
     usart::UsartOps,
 };
+use embedded_hal::digital::OutputPin;
 
 use crate::{
     process::{PipeToWriter, Process},
     serial_to_wire::{
-        bytes_to_letters::BytesToLetters, letters_to_signals::LettersToSignals,
-        segments_to_wire::TimerCallback, signals_to_segments::SignalsToSegments,
+        bytes_to_letters::BytesToLetters,
+        letters_to_signals::LettersToSignals,
+        segments_to_wire::{SegmentsToWire, TimerCallback},
+        signals_to_segments::SignalsToSegments,
     },
     strategies::Discard,
     wire_to_serial::{
@@ -64,23 +67,15 @@ pub struct App<
     WireRx,
     WireTx,
 > {
-    process: PipeToWriter<
-        LettersToBytes<
-            SignalsToLetters<
-                SegmentsToSignals<
-                    SignalsToSegments<
-                        LettersToSignals<
-                            BytesToLetters<UsartReader<Serial, SerialRx, SerialTx, Clock>, Discard>,
-                        >,
-                    >,
-                >,
+    process: SegmentsToWire<
+        SignalsToSegments<
+            LettersToSignals<
+                BytesToLetters<UsartReader<Serial, SerialRx, SerialTx, Clock>, Discard>,
             >,
-            Discard,
         >,
-        UsartWriter<Serial, SerialRx, SerialTx, Clock>,
+        WireTx,
     >,
-    rx: WireRx,
-    clock: time::Clock<TimerCallback<WireTx>>,
+    _rx: WireRx,
 }
 
 /// Interrupts of the application
@@ -96,31 +91,24 @@ impl<Serial: UsartOps<Atmega, SerialRx, SerialTx>, SerialRx, SerialTx, Clock, Wi
         tx: WireTx,
         timer: TC0,
     ) -> (Self, Interrupts<WireTx>) {
-        let (read, write) = serial.split();
+        let (serial_read, _serial_write) = serial.split();
+        let (time::Clock { timer, .. }, clock_interrupts) =
+            time::Clock::new(timer, TimerCallback::new(tx));
 
-        let read = SignalsToSegments::new(LettersToSignals::new(BytesToLetters::new(read)));
-
-        let process = PipeToWriter::new(
-            write,
-            LettersToBytes::new(SignalsToLetters::new(SegmentsToSignals::new(read))),
+        let process = SegmentsToWire::new(
+            SignalsToSegments::new(LettersToSignals::new(BytesToLetters::new(serial_read))),
+            timer,
         );
 
-        let (clock, clock_interrupts) = time::Clock::new(timer, TimerCallback::new(tx));
-
-        (Self { process, rx, clock }, (clock_interrupts,))
+        (Self { process, _rx: rx }, (clock_interrupts,))
     }
 
-    pub fn main_loop(&mut self) -> ! {
-        self.clock.timer.try_set(NonZero::new(1).unwrap());
-
+    pub fn main_loop(&mut self) -> !
+    where
+        WireTx: OutputPin<Error = Infallible>,
+    {
         loop {
             match self.process.poll() {
-                Ok(()) => (),
-                Err(nb::Error::Other(err)) => {
-                    // TODO: error handling
-
-                    drop(err);
-                }
                 Err(nb::Error::WouldBlock) => (),
             }
         }

@@ -146,7 +146,7 @@ impl<T, const CAP: usize> Buffer<T, CAP> {
     }
 }
 
-impl<T, const CAP: usize, CS> Writer<'_, T, CAP, CS>
+impl<'b, T, const CAP: usize, CS> Writer<'b, T, CAP, CS>
 where
     CS: MaybeCriticalSection,
 {
@@ -189,6 +189,53 @@ where
             .free(|cs| self.buffer.tail.borrow(cs).set(start.wrapping_add(1)));
 
         None
+    }
+
+    /// Get a slot in the buffer if available
+    ///
+    /// This function will return a slot if available, that can be used in a
+    /// second moment to push an element.
+    pub fn slot(&mut self) -> Option<Slot<'_, 'b, T, CAP, CS>> {
+        let (start, end) = self.fetch_start_and_end();
+
+        if start == end {
+            // Buffer is full
+            return None;
+        }
+
+        Some(Slot {
+            writer: self,
+            start,
+        })
+    }
+}
+
+/// A slot inside a buffer
+///
+/// This is a single slot inside the buffer that can be used to push a single
+/// element
+pub struct Slot<'w, 'b, T, const CAP: usize, CS> {
+    writer: &'w mut Writer<'b, T, CAP, CS>,
+    start: usize,
+}
+
+impl<T, const CAP: usize, CS> Slot<'_, '_, T, CAP, CS>
+where
+    CS: MaybeCriticalSection,
+{
+    /// Push an element inside the buffer
+    pub fn push(&mut self, item: T) {
+        // Writing
+        self.writer.buffer.content[self.start & (CAP - 1)].replace(MaybeUninit::new(item));
+
+        // Updating the tail, so that the reader can consume this item
+        self.writer.cs.free(|cs| {
+            self.writer
+                .buffer
+                .tail
+                .borrow(cs)
+                .set(self.start.wrapping_add(1))
+        });
     }
 }
 
@@ -248,14 +295,17 @@ where
 /// must be [`Send`] as we can read it out from another thread.
 unsafe impl<T, const CAP: usize> Sync for Buffer<T, CAP> where T: Send {}
 
+/// How to get a critical section
 pub trait MaybeCriticalSection {
     fn free<R>(&self, fun: impl FnOnce(CriticalSection) -> R) -> R;
 }
+// Need to get a new one
 impl MaybeCriticalSection for NoCriticalSection {
     fn free<R>(&self, fun: impl FnOnce(CriticalSection) -> R) -> R {
         free(fun)
     }
 }
+// Use itself
 impl MaybeCriticalSection for CriticalSection<'_> {
     fn free<R>(&self, fun: impl FnOnce(CriticalSection) -> R) -> R {
         fun(*self)

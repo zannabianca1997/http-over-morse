@@ -45,6 +45,11 @@ impl<CB> Timer<CB> {
             }
         })
     }
+
+    /// Trigger the timer at the next tick if it is not set
+    pub fn trigger_if_not_set(&mut self) -> bool {
+        self.try_set(NonZero::new(1).unwrap())
+    }
 }
 
 pub struct Interrupts<CB> {

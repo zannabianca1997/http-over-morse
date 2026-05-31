@@ -12,6 +12,9 @@ pub trait Process {
     fn poll(&mut self) -> nb::Result<Self::Ok, Self::Err>;
 }
 
+/// Uninhabited type for processes that does not produce anything
+pub enum NoItemProduced {}
+
 impl<T> Process for T
 where
     T: arduino_hal::prelude::_embedded_hal_serial_Read<u8>,
@@ -46,7 +49,7 @@ where
     P: Process<Ok = u8>,
     W: Write<u8>,
 {
-    type Ok = ();
+    type Ok = NoItemProduced;
     type Err = PipeToWriterError<P::Err, W::Error>;
 
     fn poll(&mut self) -> nb::Result<Self::Ok, Self::Err> {

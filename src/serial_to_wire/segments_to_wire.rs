@@ -1,44 +1,102 @@
 //! Write segments to the wire
 
-use core::{convert::Infallible, num::NonZero};
+use core::{cell::Cell, convert::Infallible, num::NonZero};
 
-use arduino_hal::prelude::_unwrap_infallible_UnwrapInfallible;
-use embedded_hal::digital::{OutputPin, PinState};
+use avr_device::interrupt::{CriticalSection, Mutex, free};
+use embedded_hal::digital::OutputPin;
 
-use crate::time::{MILLIS_FOR_TICK, Time};
+use crate::{
+    process::{NoItemProduced, Process},
+    segments::Segment,
+    time::{self, Time, Timer},
+    utils::ringbuf::Buffer,
+};
 
 pub struct TimerCallback<Tx> {
     pin: Tx,
-    state: PinState,
 }
 
 impl<Tx> TimerCallback<Tx> {
     pub fn new(pin: Tx) -> Self {
-        Self {
-            pin,
-            state: PinState::Low,
+        if free(|cs| BUFFER_READ_RIGHTS_TAKEN.borrow(cs).replace(true)) {
+            panic!("Cannot create two callbacks")
         }
+
+        Self { pin }
     }
 }
 
-const TICKS: NonZero<Time> = NonZero::new(
-    NonZero::new(1000u32)
-        .unwrap()
-        .div_ceil(MILLIS_FOR_TICK)
-        .get() as Time,
-)
-.unwrap();
+static BUFFER: Buffer<Segment, 16> = Buffer::new();
 
-impl<Tx> crate::time::TimerCallback for TimerCallback<Tx>
+static BUFFER_READ_RIGHTS_TAKEN: Mutex<Cell<bool>> = Mutex::new(Cell::new(false));
+
+impl<Tx> time::TimerCallback for TimerCallback<Tx>
 where
     Tx: OutputPin<Error = Infallible>,
 {
-    fn triggered(
-        &mut self,
-        _cs: avr_device::interrupt::CriticalSection,
-    ) -> Option<core::num::NonZero<crate::time::Time>> {
-        self.state = !self.state;
-        self.pin.set_state(self.state).unwrap_infallible();
-        Some(TICKS)
+    fn triggered(&mut self, cs: CriticalSection) -> Option<NonZero<Time>> {
+        let mut buffer = unsafe {
+            // Safety: Only place we take the reader, there is only one
+            // TimerCallback, and this function is not reentrant.
+            BUFFER.reader_cs(cs)
+        };
+
+        let Some(segment) = buffer.pop() else {
+            // No more segments to read, putting the wire at rest
+            self.pin.set_low();
+            return None;
+        };
+
+        let (state, time) = segment.unpack();
+
+        self.pin.set_state(state);
+        Some(time)
+    }
+}
+
+pub struct SegmentsToWire<Inner, Tx> {
+    inner: Inner,
+    timer: Timer<TimerCallback<Tx>>,
+}
+
+impl<Inner, Tx> SegmentsToWire<Inner, Tx> {
+    pub fn new(inner: Inner, timer: Timer<TimerCallback<Tx>>) -> Self {
+        Self { inner, timer }
+    }
+}
+
+impl<Inner, Tx> Process for SegmentsToWire<Inner, Tx>
+where
+    Inner: Process<Ok = Segment>,
+    Tx: OutputPin<Error = Infallible>,
+{
+    type Ok = NoItemProduced;
+    type Err = Inner::Err;
+
+    fn poll(&mut self) -> nb::Result<Self::Ok, Self::Err> {
+        let mut buffer = unsafe {
+            // Safety: Only place we take the writer, there is only one
+            // TimerCallback (that we possess), and this function is not
+            // reentrant.
+            BUFFER.writer()
+        };
+
+        // Read all segments until either the inner process blocks, or the
+        // buffer is full
+        loop {
+            // TODO: using a more general region api from fring would enable us
+            // to check for the buffer fullness only once.
+            let Some(mut slot) = buffer.slot() else {
+                // Need to wait for the callback to empty it.
+                return Err(nb::Error::WouldBlock);
+            };
+
+            let segment = self.inner.poll()?;
+
+            slot.push(segment);
+
+            // Trigger the timer now
+            self.timer.trigger_if_not_set();
+        }
     }
 }
