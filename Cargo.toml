@@ -46,7 +46,6 @@ test = false
 [dependencies]
 arduino-hal.workspace = true
 avr-device.workspace = true
-either = { version = "1.16.0", default-features = false }
 embedded-hal.workspace = true
 encoding.workspace = true
 interrupts.workspace = true

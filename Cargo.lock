@@ -318,7 +318,6 @@ dependencies = [
  "arduino-hal",
  "avr-device",
  "cargo-emit",
- "either",
  "embedded-hal 1.0.0",
  "encoding",
  "interrupts",
