@@ -11,13 +11,17 @@ use arduino_hal::{
     usart::{UsartReader, UsartWriter},
 };
 use avr_device::interrupt;
-use http_over_morse::interrupts::{INT0, InterruptStorage, TIMER0_COMPA};
+use http_over_morse::{
+    interrupts::{INT0, InterruptStorage, TIMER0_COMPA},
+    strategies,
+};
 use panic_halt as _;
 
 type App = http_over_morse::App<
     UsartReader<USART0, Pin<Input, D0>, Pin<Output, D1>>,
     UsartWriter<USART0, Pin<Input, D0>, Pin<Output, D1>>,
     Pin<Output, D13>,
+    strategies::Base32,
 >;
 
 type Interrupts = http_over_morse::Interrupts<Pin<Output, D13>>;
@@ -26,7 +30,7 @@ type Interrupts = http_over_morse::Interrupts<Pin<Output, D13>>;
 fn main() -> ! {
     let dp = arduino_hal::Peripherals::take().unwrap();
     let pins = arduino_hal::pins!(dp);
-    let (serial_reader, serial_writer) = arduino_hal::default_serial!(dp, pins, 57600).split();
+    let (serial_reader, serial_writer) = arduino_hal::default_serial!(dp, pins, 9600).split();
     let external_interrupts = dp.EXINT;
     let rx = pins.d2;
     let tx = pins.d13.into_output();

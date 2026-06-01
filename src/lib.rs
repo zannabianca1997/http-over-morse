@@ -13,14 +13,13 @@ use arduino_hal::{
 use embedded_hal::digital::OutputPin;
 
 use crate::{
-    process::{PipeToWriter, Process},
+    process::{Process, pipe_to_writer::PipeToWriter},
     serial_to_wire::{
         bytes_to_letters::BytesToLetters,
         letters_to_signals::LettersToSignals,
         segments_to_wire::{SegmentsToWire, TimerCallback},
         signals_to_segments::SignalsToSegments,
     },
-    strategies::Discard,
     time::Stopwatch,
     wire_to_serial::{
         letters_to_bytes::LettersToBytes,
@@ -39,8 +38,7 @@ mod time;
 mod utils {
     pub mod ringbuf;
 }
-
-mod strategies;
+pub mod strategies;
 
 mod serial_to_wire {
     //! Processes for writing to wire
@@ -60,13 +58,13 @@ mod wire_to_serial {
 }
 
 /// Firmware
-pub struct App<SerialReader, SerialWriter, WireTx> {
+pub struct App<SerialReader, SerialWriter, WireTx, Strategy: strategies::Strategy> {
     serial_to_wire: SegmentsToWire<
-        SignalsToSegments<LettersToSignals<BytesToLetters<SerialReader, Discard>>>,
+        SignalsToSegments<LettersToSignals<BytesToLetters<SerialReader, Strategy>>>,
         WireTx,
     >,
     wire_to_serial: PipeToWriter<
-        LettersToBytes<SignalsToLetters<SegmentsToSignals<WireToSegments>>, Discard>,
+        LettersToBytes<SignalsToLetters<SegmentsToSignals<WireToSegments>>, Strategy>,
         SerialWriter,
     >,
 }
@@ -77,7 +75,9 @@ pub type Interrupts<WireTx> = (
     listening_pin::Interrupts<ListeningPinCallback>,
 );
 
-impl<SerialReader, SerialWriter, WireTx> App<SerialReader, SerialWriter, WireTx> {
+impl<SerialReader, SerialWriter, WireTx, S: strategies::Strategy>
+    App<SerialReader, SerialWriter, WireTx, S>
+{
     /// Initialize the application
     pub fn new(
         serial_reader: SerialReader,
