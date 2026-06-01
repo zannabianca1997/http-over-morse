@@ -1,11 +1,9 @@
 //! Read bytes from a letter source
 
+use encoding::LetterOrSpace;
 use process::Process;
 
-use crate::{
-    encoding::LetterOrSpace,
-    strategies::{Strategy, ToBytes},
-};
+use crate::strategies::{Strategy, ToBytes};
 
 pub struct LettersToBytes<Inner, S: Strategy> {
     inner: Inner,

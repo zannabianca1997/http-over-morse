@@ -1,11 +1,9 @@
 //! Convert bytes into morse letters
 
+use encoding::LetterOrSpace;
 use process::Process;
 
-use crate::{
-    encoding::LetterOrSpace,
-    strategies::{Strategy, ToLetters},
-};
+use crate::strategies::{Strategy, ToLetters};
 
 /// Read morse letters from a byte source
 pub struct BytesToLetters<Inner, S: Strategy> {

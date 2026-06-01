@@ -4,7 +4,7 @@
 
 use super::{Strategy, ToBytes, ToLetters, sealed};
 
-use crate::encoding::LetterOrSpace;
+use encoding::LetterOrSpace;
 
 /// Discard all bytes that are not encodable
 ///

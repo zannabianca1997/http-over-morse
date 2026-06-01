@@ -2,7 +2,7 @@ use core::num::NonZero;
 
 use embedded_hal::digital::PinState;
 
-use crate::time::Time;
+use crate::Time;
 
 /// Represent a segment on the wire - either high or low
 ///

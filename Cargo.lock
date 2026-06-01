@@ -230,6 +230,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "723dce4e9f25b6e6c5f35628e144794e5b459216ed7da97b7c4b66cdb3fa82ca"
 
 [[package]]
+name = "encoding"
+version = "0.1.0"
+dependencies = [
+ "cargo-emit",
+ "itertools",
+ "nunny",
+ "proc-macro2",
+ "quote",
+ "rayon",
+ "serde",
+ "time",
+ "toml",
+]
+
+[[package]]
 name = "encoding_rs"
 version = "0.8.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -305,17 +320,14 @@ dependencies = [
  "cargo-emit",
  "either",
  "embedded-hal 1.0.0",
- "itertools",
+ "encoding",
+ "interrupts",
  "nb 1.1.0",
  "nunny",
  "panic-halt",
- "proc-macro2",
  "process",
- "quote",
- "rayon",
  "ringbuf",
- "serde",
- "toml",
+ "time",
  "ufmt",
 ]
 
@@ -437,6 +449,13 @@ name = "inflections"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a257582fdcde896fd96463bf2d40eefea0580021c0712a0e2b028b60b47a837a"
+
+[[package]]
+name = "interrupts"
+version = "0.1.0"
+dependencies = [
+ "avr-device",
+]
 
 [[package]]
 name = "itertools"
@@ -902,6 +921,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.110",
+]
+
+[[package]]
+name = "time"
+version = "0.1.0"
+dependencies = [
+ "arduino-hal",
+ "avr-device",
+ "embedded-hal 1.0.0",
+ "interrupts",
 ]
 
 [[package]]

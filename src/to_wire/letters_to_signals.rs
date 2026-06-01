@@ -2,7 +2,7 @@
 
 use process::Process;
 
-use crate::encoding::{LETTER_SPACE, LetterOrSpace, Signal, Symbol, WORD_SPACE};
+use encoding::{LETTER_SPACE, LetterOrSpace, Signal, Symbol, WORD_SPACE};
 
 pub struct LettersToSignals<Inner> {
     inner: Inner,

@@ -4,7 +4,7 @@
 
 use super::{Strategy, ToBytes, ToLetters, sealed};
 
-use crate::encoding::{Letter, LetterOrSpace};
+use encoding::{Letter, LetterOrSpace};
 
 pub enum Base32 {}
 impl sealed::Sealed for Base32 {}

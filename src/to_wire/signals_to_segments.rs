@@ -5,15 +5,13 @@
 use embedded_hal::digital::PinState;
 use process::Process;
 
-use crate::{
-    encoding::{
-        self, DOT, DOT_LENGTH, LETTER_SPACE, LETTER_SPACE_LENGTH, LINE, LINE_LENGTH,
-        SYMBOL_SPACE_LENGTH,
-        Signal::{self, Space, Symbol},
-        WORD_SPACE, WORD_SPACE_LENGTH,
-    },
-    segments::Segment,
+use encoding::{
+    self, DOT, DOT_LENGTH, LETTER_SPACE, LETTER_SPACE_LENGTH, LINE, LINE_LENGTH,
+    SYMBOL_SPACE_LENGTH,
+    Signal::{self, Space, Symbol},
+    WORD_SPACE, WORD_SPACE_LENGTH,
 };
+use time::segments::Segment;
 
 pub struct SignalsToSegments<Inner> {
     inner: Inner,

@@ -1,12 +1,23 @@
-//! General encoding stuff
+#![doc = include_str!("../README.md")]
+#![no_std]
+#![deny(unsafe_op_in_unsafe_fn)]
+// Needed to slice the static storage in a const way
+#![feature(const_trait_impl)]
+#![feature(const_index)]
 
 use core::mem;
 use core::num::NonZero;
 use core::num::NonZeroU8;
 
-use crate::encoding::generated::DecodeState;
-use crate::time::MILLIS_FOR_TICK;
-use crate::time::Time;
+use time::{MILLIS_FOR_TICK, Time};
+
+mod generated {
+    //! Code generated from `morse.txt`
+    use super::{perfect_hash::*, symbol::*};
+
+    include! {env!("MORSE_GENERATED_RS")}
+}
+use generated::DecodeState;
 
 mod symbol;
 pub use symbol::{DOT, LINE, Symbol};
@@ -18,7 +29,7 @@ pub const MILLIS_DOT_LENGTH: NonZero<u32> = NonZero::new(8).unwrap();
 
 pub const DOT_LENGTH: NonZero<Time> = const {
     let value = MILLIS_DOT_LENGTH.div_ceil(MILLIS_FOR_TICK).get();
-    if value > crate::segments::MAX_LENGTH.get() as _ {
+    if value > time::segments::MAX_LENGTH.get() as _ {
         panic!("Exceeded segment max length!")
     }
     NonZero::new(value as Time).unwrap()
@@ -45,7 +56,7 @@ pub const WORD_SPACE_LENGTH: NonZero<Time> = time_multiple(SYMBOL_SPACE_LENGTH, 
 
 const fn time_multiple(unit: NonZero<Time>, count: Time) -> NonZero<Time> {
     let total = unit.checked_mul(NonZero::new(count).unwrap()).unwrap();
-    if total.get() > crate::segments::MAX_LENGTH.get() {
+    if total.get() > time::segments::MAX_LENGTH.get() {
         panic!("Exceeded segment max length!")
     }
     total
@@ -74,13 +85,6 @@ pub enum Signal {
 /// A valid morse letter
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Letter(NonZeroU8);
-
-mod generated {
-    //! Code generated from `morse.txt`
-    use super::{perfect_hash::*, symbol::*};
-
-    include! {env!("MORSE_GENERATED_RS")}
-}
 
 impl Letter {
     pub const fn new(ch: u8) -> Option<Self> {

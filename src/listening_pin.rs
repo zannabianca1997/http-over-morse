@@ -101,7 +101,7 @@ pub struct Interrupts<CB> {
     callback: CB,
 }
 
-impl<CB> crate::interrupts::Interrupts for Interrupts<CB>
+impl<CB> interrupts::Interrupts for Interrupts<CB>
 where
     CB: ListeningPinCallback,
 {

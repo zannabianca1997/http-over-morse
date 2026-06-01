@@ -7,10 +7,7 @@ use embedded_hal::digital::OutputPin;
 use process::{NoItemProduced, Process};
 use ringbuf::Buffer;
 
-use crate::{
-    segments::Segment,
-    time::{self, Time, Timer},
-};
+use time::{self, Time, Timer, segments::Segment};
 
 pub struct TimerCallback<Tx> {
     pin: Tx,

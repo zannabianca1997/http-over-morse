@@ -1,10 +1,12 @@
-//! Time related stuff
+#![doc = include_str!("../README.md")]
+#![no_std]
+#![deny(unsafe_op_in_unsafe_fn)]
 
 use core::num::NonZero;
 
 use arduino_hal::pac::TC0;
 
-pub use stopwatch::Stopwatch;
+pub use stopwatch::{Stopwatch, StopwatchOverflow, StopwatchReset};
 pub use timer::{Timer, TimerCallback};
 
 /// Type for time calculations
@@ -12,8 +14,10 @@ pub type Time = usize;
 
 mod tc0;
 
-pub mod stopwatch;
+mod stopwatch;
 mod timer;
+
+pub mod segments;
 
 const PRESCALE: tc0::Prescale = tc0::Prescale::Prescale1024;
 const TIMER_COUNTS: u8 = 125;

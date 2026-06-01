@@ -6,13 +6,19 @@ license-file = "LICENSE"
 default-run = "wiretap"
 
 [workspace]
-members = [".", "process", "ringbuf"]
+resolver = "3"
+members = [".", "encoding", "interrupts", "process", "ringbuf", "time"]
 
 [workspace.dependencies]
 avr-device = { version = "0.8.1", features = ["atmega328p"] }
+embedded-hal = "1.0.0"
+encoding = { path = "encoding" }
+interrupts = { path = "interrupts" }
 nb = "1.1.0"
+nunny = { version = "0.2.2", default-features = false }
 process = { path = "process" }
 ringbuf = { path = "ringbuf" }
+time = { path = "time" }
 
 [workspace.dependencies.arduino-hal]
 git = "https://github.com/rahix/avr-hal"
@@ -32,22 +38,19 @@ test = false
 arduino-hal.workspace = true
 avr-device.workspace = true
 either = { version = "1.16.0", default-features = false }
-embedded-hal = "1.0.0"
+embedded-hal.workspace = true
+encoding.workspace = true
+interrupts.workspace = true
 nb.workspace = true
-nunny = { version = "0.2.2", default-features = false }
+nunny.workspace = true
 panic-halt = "1.0.0"
 process.workspace = true
 ringbuf.workspace = true
+time.workspace = true
 ufmt = "0.2.0"
 
 [build-dependencies]
 cargo-emit = "0.2.1"
-itertools = "0.14.0"
-proc-macro2 = "1.0.106"
-quote = "1.0.45"
-rayon = "1.12.0"
-serde = { version = "1.0.228", features = ["derive"] }
-toml = "1.1.2"
 
 # Configure the build for minimal size - AVRs have very little program memory
 [profile.dev]

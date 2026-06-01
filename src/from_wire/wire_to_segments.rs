@@ -4,18 +4,13 @@ use core::{convert::Infallible, num::NonZero};
 
 use avr_device::interrupt::CriticalSection;
 use embedded_hal::digital::PinState;
+
+use encoding::WORD_SPACE_LENGTH;
 use process::Process;
 use ringbuf::Buffer;
+use time::{StopwatchOverflow, StopwatchReset, Time, segments::Segment};
 
-use crate::{
-    encoding::WORD_SPACE_LENGTH,
-    listening_pin::{Edge, ListeningPin},
-    segments::Segment,
-    time::{
-        Time,
-        stopwatch::{StopwatchOverflow, StopwatchReset},
-    },
-};
+use crate::listening_pin::{Edge, ListeningPin};
 
 /// Callback to the listening pin
 ///

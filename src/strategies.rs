@@ -1,6 +1,6 @@
 //! Strategies to convert bytes to morse letters
 
-use crate::encoding::LetterOrSpace;
+use encoding::LetterOrSpace;
 
 pub use base32::Base32;
 pub use discard::Discard;

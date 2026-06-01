@@ -3,8 +3,9 @@
 use core::convert::Infallible;
 
 use process::Process;
+use time::StopwatchOverflow;
 
-use crate::{listening_pin::ListeningPin, time::stopwatch::StopwatchOverflow};
+use crate::listening_pin::ListeningPin;
 
 use letters_to_bytes::LettersToBytes;
 use segments_to_signals::SegmentsToSignals;

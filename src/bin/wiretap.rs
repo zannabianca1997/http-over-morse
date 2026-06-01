@@ -18,16 +18,18 @@
 
 use arduino_hal::port::{D13, Pin, mode::Output};
 use avr_device::interrupt;
+use panic_halt as _;
+
+use interrupts::{INT0, InterruptStorage, TIMER0_COMPA};
+use process::{Process as _, pipe_to_writer::PipeToWriter};
+use time::{self, Clock, Stopwatch};
+
 use http_over_morse::{
     from_wire::{BytesFromWire, ListeningPinCallback},
-    interrupts::{INT0, InterruptStorage, TIMER0_COMPA},
     listening_pin::{self, ListeningPin},
     strategies,
-    time::{self, Clock, Stopwatch},
     to_wire::{BytesToWire, TimerCallback},
 };
-use panic_halt as _;
-use process::{Process as _, pipe_to_writer::PipeToWriter};
 
 type Strategy = cfg_select! {
     base32 => strategies::Base32,

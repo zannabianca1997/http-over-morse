@@ -65,7 +65,7 @@ pub struct Interrupts {
 /// exists at a time.
 static STOPWATCH: Mutex<Cell<Time>> = Mutex::new(Cell::new(0));
 
-impl crate::interrupts::Interrupts for Interrupts {
+impl interrupts::Interrupts for Interrupts {
     fn timer0compa(&mut self, cs: CriticalSection) {
         STOPWATCH.borrow(cs).update(|t| t.saturating_add(1));
     }

@@ -56,7 +56,7 @@ pub struct Interrupts<CB> {
 /// exists at a time.
 static TIMER: Mutex<Cell<Option<NonZero<Time>>>> = Mutex::new(Cell::new(None));
 
-impl<CB> crate::interrupts::Interrupts for Interrupts<CB>
+impl<CB> interrupts::Interrupts for Interrupts<CB>
 where
     CB: TimerCallback,
 {

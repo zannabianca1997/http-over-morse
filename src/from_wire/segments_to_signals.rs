@@ -7,16 +7,13 @@ use core::num::NonZero;
 use embedded_hal::digital::PinState;
 use process::Process;
 
-use crate::{
-    encoding::{
-        DOT_LENGTH, LETTER_SPACE, LETTER_SPACE_LENGTH, LINE_LENGTH, SYMBOL_SPACE_LENGTH,
-        Signal::{self, Space, Symbol},
-        Symbol::{DOT, LINE},
-        WORD_SPACE, WORD_SPACE_LENGTH, threshold,
-    },
-    segments::Segment,
-    time::Time,
+use encoding::{
+    DOT_LENGTH, LETTER_SPACE, LETTER_SPACE_LENGTH, LINE_LENGTH, SYMBOL_SPACE_LENGTH,
+    Signal::{self, Space, Symbol},
+    Symbol::{DOT, LINE},
+    WORD_SPACE, WORD_SPACE_LENGTH, threshold,
 };
+use time::{Time, segments::Segment};
 
 const DOT_LINE_THRESHOLD: NonZero<Time> = threshold(DOT_LENGTH, LINE_LENGTH);
 

@@ -5,7 +5,7 @@ use core::convert::Infallible;
 use embedded_hal::digital::OutputPin;
 use process::{NoItemProduced, Process};
 
-use crate::time::Timer;
+use time::Timer;
 
 use bytes_to_letters::BytesToLetters;
 use letters_to_signals::LettersToSignals;

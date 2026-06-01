@@ -1,4 +1,6 @@
 //! Perfect hash u8 -> u8 implementation
+//!
+//! Split in it's own file to be shared with `build.rs`
 
 use core::num::NonZeroU16;
 
