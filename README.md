@@ -1,6 +1,6 @@
 # http-over-morse
 
-Making two arduino talk over morse
+Making arduino talk over morse
 
 ## Build Instructions
 1. Install prerequisites as described in the [`avr-hal` README] (`avr-gcc`, `avr-libc`, `avrdude`, [`ravedude`]).

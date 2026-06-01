@@ -3,6 +3,7 @@
 //! Other than direct conversion, space is inserted between the symbols
 
 use embedded_hal::digital::PinState;
+use process::Process;
 
 use crate::{
     encoding::{
@@ -11,7 +12,6 @@ use crate::{
         Signal::{self, Space, Symbol},
         WORD_SPACE, WORD_SPACE_LENGTH,
     },
-    process::Process,
     segments::Segment,
 };
 

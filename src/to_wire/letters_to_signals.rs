@@ -1,9 +1,8 @@
 //! Convert letters into signals
 
-use crate::{
-    encoding::{LETTER_SPACE, LetterOrSpace, Signal, Symbol, WORD_SPACE},
-    process::Process,
-};
+use process::Process;
+
+use crate::encoding::{LETTER_SPACE, LetterOrSpace, Signal, Symbol, WORD_SPACE};
 
 pub struct LettersToSignals<Inner> {
     inner: Inner,

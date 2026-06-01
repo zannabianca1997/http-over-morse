@@ -1,8 +1,9 @@
 //! Read bytes from a letter source
 
+use process::Process;
+
 use crate::{
     encoding::LetterOrSpace,
-    process::Process,
     strategies::{Strategy, ToBytes},
 };
 

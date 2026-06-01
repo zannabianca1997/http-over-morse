@@ -2,17 +2,16 @@
 
 use core::convert::Infallible;
 
-use bytes_to_letters::BytesToLetters;
 use embedded_hal::digital::OutputPin;
+use process::{NoItemProduced, Process};
+
+use crate::time::Timer;
+
+use bytes_to_letters::BytesToLetters;
 use letters_to_signals::LettersToSignals;
 use segments_to_wire::SegmentsToWire;
 pub use segments_to_wire::TimerCallback;
 use signals_to_segments::SignalsToSegments;
-
-use crate::{
-    process::{NoItemProduced, Process},
-    time::Timer,
-};
 
 pub mod bytes_to_letters;
 pub mod letters_to_signals;

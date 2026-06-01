@@ -1,10 +1,4 @@
-//! Ringbuffer implementation
-//!
-//! Many of the implementations online use atomics :(
-//!
-//! Implementation is loosely based on
-//! [fring](https://docs.rs/fring/latest/fring/)
-
+#![doc = include_str!("../README.md")]
 #![no_std]
 #![deny(unsafe_op_in_unsafe_fn)]
 

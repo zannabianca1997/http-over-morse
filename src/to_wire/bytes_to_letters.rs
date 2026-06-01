@@ -1,8 +1,9 @@
 //! Convert bytes into morse letters
 
+use process::Process;
+
 use crate::{
     encoding::LetterOrSpace,
-    process::Process,
     strategies::{Strategy, ToLetters},
 };
 

@@ -1,9 +1,8 @@
 //! Read letters from a signal source
 
-use crate::{
-    encoding::{Decoder, LetterOrSpace, Signal, WORD_SPACE},
-    process::Process,
-};
+use process::Process;
+
+use crate::encoding::{Decoder, LetterOrSpace, Signal, WORD_SPACE};
 
 pub struct SignalsToLetters<Inner> {
     inner: Inner,

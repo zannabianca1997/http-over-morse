@@ -7,7 +7,6 @@
 mod encoding;
 pub mod interrupts;
 pub mod listening_pin;
-pub mod process;
 mod segments;
 pub mod strategies;
 pub mod time;

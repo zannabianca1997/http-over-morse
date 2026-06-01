@@ -1,5 +1,10 @@
+#![doc = include_str!("../README.md")]
+#![no_std]
+#![deny(unsafe_op_in_unsafe_fn)]
+
 pub mod buffer_output;
 pub mod pipe_to_writer;
+mod read_as_process;
 
 /// A running process
 pub trait Process {
@@ -26,15 +31,3 @@ pub trait Process {
 
 /// Uninhabited type for processes that does not produce anything
 pub enum NoItemProduced {}
-
-impl<T> Process for T
-where
-    T: arduino_hal::prelude::_embedded_hal_serial_Read<u8>,
-{
-    type Ok = u8;
-    type Err = T::Error;
-
-    fn poll(&mut self) -> nb::Result<Self::Ok, Self::Err> {
-        self.read()
-    }
-}

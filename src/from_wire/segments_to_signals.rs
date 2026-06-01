@@ -5,6 +5,7 @@
 use core::num::NonZero;
 
 use embedded_hal::digital::PinState;
+use process::Process;
 
 use crate::{
     encoding::{
@@ -13,7 +14,6 @@ use crate::{
         Symbol::{DOT, LINE},
         WORD_SPACE, WORD_SPACE_LENGTH, threshold,
     },
-    process::Process,
     segments::Segment,
     time::Time,
 };

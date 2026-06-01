@@ -4,12 +4,12 @@ use core::{convert::Infallible, num::NonZero};
 
 use avr_device::interrupt::CriticalSection;
 use embedded_hal::digital::PinState;
+use process::Process;
 use ringbuf::Buffer;
 
 use crate::{
     encoding::WORD_SPACE_LENGTH,
     listening_pin::{Edge, ListeningPin},
-    process::Process,
     segments::Segment,
     time::{
         Time,

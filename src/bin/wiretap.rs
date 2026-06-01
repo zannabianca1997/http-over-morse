@@ -22,12 +22,12 @@ use http_over_morse::{
     from_wire::{BytesFromWire, ListeningPinCallback},
     interrupts::{INT0, InterruptStorage, TIMER0_COMPA},
     listening_pin::{self, ListeningPin},
-    process::{Process as _, pipe_to_writer::PipeToWriter},
     strategies,
     time::{self, Clock, Stopwatch},
     to_wire::{BytesToWire, TimerCallback},
 };
 use panic_halt as _;
+use process::{Process as _, pipe_to_writer::PipeToWriter};
 
 type Strategy = cfg_select! {
     base32 => strategies::Base32,
