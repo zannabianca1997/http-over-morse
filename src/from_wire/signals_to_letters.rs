@@ -46,6 +46,7 @@ where
 
                         // Ignoring it for now
                         let _ = err;
+                        self.decoder = Decoder::new();
                     }
                 },
                 Signal::Space(_) if self.decoder.is_empty() => {
