@@ -2,6 +2,8 @@
 //!
 //! Alphabet is: A-Z,0
 
+use core::hint::cold_path;
+
 use super::{Strategy, ToBytes, ToLetters, sealed};
 
 use encoding::{Letter, LetterOrSpace};
@@ -51,6 +53,7 @@ impl ToBytes for Decode {
                     // TODO: handle errors what to do when we receive a letter
                     // that's not a b32 letter?
 
+                    cold_path();
                     // Skipping for now
                     continue;
                 };
@@ -65,6 +68,8 @@ impl ToBytes for Decode {
                 } else {
                     // Ouch. Additional bits...
                     // TODO: handle errors. What to do when we received additional bytes?
+
+                    cold_path();
                     // Ignoring them for now
                     self.bits = 0;
                     self.len = 0;

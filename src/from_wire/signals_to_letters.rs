@@ -1,5 +1,7 @@
 //! Read letters from a signal source
 
+use core::hint::cold_path;
+
 use process::Process;
 
 use encoding::{Decoder, LetterOrSpace, Signal, WORD_SPACE};
@@ -44,6 +46,8 @@ where
                         // Invalid letter
                         // TODO: error correction?
 
+                        cold_path();
+
                         // Ignoring it for now
                         let _ = err;
                         self.decoder = Decoder::new();
@@ -65,6 +69,8 @@ where
                         Err(err) => {
                             // Invalid letter
                             // TODO: error correction?
+
+                            cold_path();
 
                             // Ignoring it for now
                             let _ = err;
