@@ -1,9 +1,7 @@
 //! Read letters from a signal source
 
-use core::hint::cold_path;
-
 use crate::{
-    encoding::{Decoder, InvalidContinuation, InvalidLetter, LetterOrSpace, Signal, WORD_SPACE},
+    encoding::{Decoder, LetterOrSpace, Signal, WORD_SPACE},
     process::Process,
 };
 
@@ -28,7 +26,7 @@ where
     Inner: Process<Ok = Signal>,
 {
     type Ok = LetterOrSpace;
-    type Err = Error<Inner::Err>;
+    type Err = Inner::Err;
 
     fn poll(&mut self) -> nb::Result<Self::Ok, Self::Err> {
         loop {
@@ -37,7 +35,7 @@ where
                 return Ok(LetterOrSpace::SPACE);
             }
 
-            let signal = self.inner.poll().map_err(|err| err.map(Error::Inner))?;
+            let signal = self.inner.poll()?;
 
             match signal {
                 Signal::Symbol(symbol) => match self.decoder.digest(symbol) {
@@ -47,8 +45,8 @@ where
                         // Invalid letter
                         // TODO: error correction?
 
-                        cold_path();
-                        return Err(nb::Error::Other(Error::InvalidContinuation(err)));
+                        // Ignoring it for now
+                        let _ = err;
                     }
                 },
                 Signal::Space(_) if self.decoder.is_empty() => {
@@ -68,18 +66,12 @@ where
                             // Invalid letter
                             // TODO: error correction?
 
-                            cold_path();
-                            return Err(nb::Error::Other(Error::InvalidLetter(err)));
+                            // Ignoring it for now
+                            let _ = err;
                         }
                     }
                 }
             }
         }
     }
-}
-
-pub enum Error<I> {
-    Inner(I),
-    InvalidLetter(InvalidLetter),
-    InvalidContinuation(InvalidContinuation),
 }

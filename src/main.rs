@@ -21,14 +21,17 @@ type App = http_over_morse::App<
     UsartReader<USART0, Pin<Input, D0>, Pin<Output, D1>>,
     UsartWriter<USART0, Pin<Input, D0>, Pin<Output, D1>>,
     Pin<Output, D13>,
-    strategies::Discard,
+    strategies::Base32,
 >;
 
 type Interrupts = http_over_morse::Interrupts<Pin<Output, D13>>;
 
 #[arduino_hal::entry]
 fn main() -> ! {
-    let dp = arduino_hal::Peripherals::take().unwrap();
+    let dp = unsafe {
+        // Safety: main just started
+        arduino_hal::Peripherals::steal()
+    };
     let pins = arduino_hal::pins!(dp);
     let (serial_reader, serial_writer) = arduino_hal::default_serial!(dp, pins, 9600).split();
     let external_interrupts = dp.EXINT;

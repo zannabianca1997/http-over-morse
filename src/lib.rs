@@ -143,11 +143,6 @@ where
             }
             match self.wire_to_serial.poll() {
                 Err(nb::Error::WouldBlock) => (),
-                Err(nb::Error::Other(err)) => {
-                    // TODO: handle the errors somehow
-
-                    drop(err);
-                }
             }
         }
     }

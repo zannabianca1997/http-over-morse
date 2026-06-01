@@ -90,10 +90,16 @@ impl Encode {
     /// Encode the last five bits to a letter
     const fn u5_to_letter(u5: u8) -> Letter {
         let u5 = u5 & 0b0001_1111;
-        if u5 <= b'Z' - b'A' {
-            Letter::new(u5 + b'A').unwrap()
+        let letter = if u5 <= b'Z' - b'A' {
+            Letter::new(u5 + b'A')
         } else {
-            Letter::new(u5 + (b'0' + b'A' - b'Z' - 1)).unwrap()
+            Letter::new(u5 + (b'0' + b'A' - b'Z' - 1))
+        };
+        unsafe {
+            // Safety: Between the mask and the `if` all the u8 must end up to
+            // valid letters. This is also checked by the const evaluation
+            // under.
+            letter.unwrap_unchecked()
         }
     }
 }
