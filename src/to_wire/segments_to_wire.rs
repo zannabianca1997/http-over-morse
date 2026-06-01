@@ -4,12 +4,12 @@ use core::{convert::Infallible, num::NonZero};
 
 use avr_device::interrupt::CriticalSection;
 use embedded_hal::digital::OutputPin;
+use ringbuf::Buffer;
 
 use crate::{
     process::{NoItemProduced, Process},
     segments::Segment,
     time::{self, Time, Timer},
-    utils::ringbuf::Buffer,
 };
 
 pub struct TimerCallback<Tx> {
@@ -58,7 +58,7 @@ pub struct SegmentsToWire<Inner, Tx> {
 }
 
 impl<Inner, Tx> SegmentsToWire<Inner, Tx> {
-    pub fn new(timer: Timer<TimerCallback<Tx>>, inner: Inner) -> Self {
+    pub const fn new(timer: Timer<TimerCallback<Tx>>, inner: Inner) -> Self {
         Self { inner, timer }
     }
 }

@@ -1,7 +1,8 @@
 //! Buffer output of a process
 
+use ringbuf::Buffer;
+
 use super::Process;
-use crate::utils::ringbuf::Buffer;
 
 pub struct BufferOutput<Inner, const CAP: usize>
 where

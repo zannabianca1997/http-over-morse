@@ -4,6 +4,7 @@ use core::{convert::Infallible, num::NonZero};
 
 use avr_device::interrupt::CriticalSection;
 use embedded_hal::digital::PinState;
+use ringbuf::Buffer;
 
 use crate::{
     encoding::WORD_SPACE_LENGTH,
@@ -14,7 +15,6 @@ use crate::{
         Time,
         stopwatch::{StopwatchOverflow, StopwatchReset},
     },
-    utils::ringbuf::Buffer,
 };
 
 /// Callback to the listening pin

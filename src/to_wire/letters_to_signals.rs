@@ -12,7 +12,7 @@ pub struct LettersToSignals<Inner> {
 }
 
 impl<Inner> LettersToSignals<Inner> {
-    pub fn new(inner: Inner) -> Self {
+    pub const fn new(inner: Inner) -> Self {
         Self {
             inner,
             emitting: None,

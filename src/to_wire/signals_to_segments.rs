@@ -28,7 +28,7 @@ enum State {
 }
 
 impl<Inner> SignalsToSegments<Inner> {
-    pub fn new(inner: Inner) -> Self {
+    pub const fn new(inner: Inner) -> Self {
         Self {
             inner,
             state: State::Idle,
