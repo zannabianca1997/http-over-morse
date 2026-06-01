@@ -1,9 +1,18 @@
+//! Direct to wire communication
+//!
+//! This binary will pipe the content of the serial port directly to the wire,
+//! and read back the wire content to the serial port.
+//!
+//! # Caveat
+//! Even at the slowest possible baud rate of 250 the encoding is yet not fast
+//! enough to empty the serial buffer in time. Do not pipe things straight to
+//! this serial port
+
 #![no_std]
 #![no_main]
 #![feature(abi_avr_interrupt)]
 
 use arduino_hal::{
-    hal::usart::BaudrateExt,
     pac::USART0,
     port::{
         D0, D1, D13, Pin,

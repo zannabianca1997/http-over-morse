@@ -3,6 +3,7 @@ name = "http-over-morse"
 version = "0.1.0"
 edition = "2024"
 license-file = "LICENSE"
+default-run = "hom-direct"
 
 [lib]
 bench = false
@@ -10,7 +11,7 @@ test = false
 
 [[bin]]
 bench = false
-name = "http-over-morse"
+name = "hom-direct"
 test = false
 
 [dependencies]
