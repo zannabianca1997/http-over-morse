@@ -29,6 +29,14 @@ use perfect_hash::*;
 use crate::primes::PRIMES;
 
 fn main() {
+    // Configurations
+    println!("cargo::rustc-check-cfg=cfg(base32)");
+    cargo_emit::rerun_if_env_changed!("BASE32");
+    if env::var_os("BASE32").is_some() {
+        cargo_emit::rustc_cfg!("base32")
+    }
+
+    // Generation from the morse definition
     cargo_emit::rerun_if_changed!(MORSE_DEFINITIONS);
 
     let definitions = fs::read_to_string(MORSE_DEFINITIONS).expect("Cannot read definition file");
