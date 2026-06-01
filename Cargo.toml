@@ -7,13 +7,22 @@ default-run = "wiretap"
 
 [workspace]
 resolver = "3"
-members = [".", "encoding", "interrupts", "process", "ringbuf", "time"]
+members = [
+  ".",
+  "encoding",
+  "interrupts",
+  "listening_pin",
+  "process",
+  "ringbuf",
+  "time"
+]
 
 [workspace.dependencies]
 avr-device = { version = "0.8.1", features = ["atmega328p"] }
 embedded-hal = "1.0.0"
 encoding = { path = "encoding" }
 interrupts = { path = "interrupts" }
+listening_pin = { path = "listening_pin" }
 nb = "1.1.0"
 nunny = { version = "0.2.2", default-features = false }
 process = { path = "process" }
@@ -41,6 +50,7 @@ either = { version = "1.16.0", default-features = false }
 embedded-hal.workspace = true
 encoding.workspace = true
 interrupts.workspace = true
+listening_pin.workspace = true
 nb.workspace = true
 nunny.workspace = true
 panic-halt = "1.0.0"

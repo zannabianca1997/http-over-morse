@@ -10,7 +10,7 @@ use process::Process;
 use ringbuf::Buffer;
 use time::{StopwatchOverflow, StopwatchReset, Time, segments::Segment};
 
-use crate::listening_pin::{Edge, ListeningPin};
+use listening_pin::{Edge, ListeningPin};
 
 /// Callback to the listening pin
 ///
@@ -27,7 +27,7 @@ impl ListeningPinCallback {
     }
 }
 
-impl crate::listening_pin::ListeningPinCallback for ListeningPinCallback {
+impl listening_pin::ListeningPinCallback for ListeningPinCallback {
     fn triggered(&mut self, cs: CriticalSection, edge: Edge) {
         let mut buffer = unsafe {
             // Safety: Only place we take the writer, there is only one

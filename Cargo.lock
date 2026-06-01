@@ -322,6 +322,7 @@ dependencies = [
  "embedded-hal 1.0.0",
  "encoding",
  "interrupts",
+ "listening_pin",
  "nb 1.1.0",
  "nunny",
  "panic-halt",
@@ -464,6 +465,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
 dependencies = [
  "either",
+]
+
+[[package]]
+name = "listening_pin"
+version = "0.1.0"
+dependencies = [
+ "arduino-hal",
+ "avr-device",
+ "embedded-hal 1.0.0",
+ "interrupts",
 ]
 
 [[package]]

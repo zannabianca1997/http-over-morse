@@ -21,12 +21,12 @@ use avr_device::interrupt;
 use panic_halt as _;
 
 use interrupts::{INT0, InterruptStorage, TIMER0_COMPA};
+use listening_pin::{self, ListeningPin};
 use process::{Process as _, pipe_to_writer::PipeToWriter};
 use time::{self, Clock, Stopwatch};
 
 use http_over_morse::{
     from_wire::{BytesFromWire, ListeningPinCallback},
-    listening_pin::{self, ListeningPin},
     strategies,
     to_wire::{BytesToWire, TimerCallback},
 };
