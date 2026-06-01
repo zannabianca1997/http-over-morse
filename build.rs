@@ -399,7 +399,10 @@ fn decode(definitions: &[(u8, Range<usize>)], symbols_slice: &[Symbol]) -> Token
             pub const fn symbols(&self) -> &'static [Symbol] {
                 let start = SYMBOLS_START_LOOKUP[SYMBOLS_START_HASHER.hash(*self as u8) as usize] as usize;
                 let end = start + SYMBOLS_LEN_LOOKUP[SYMBOLS_LEN_HASHER.hash(*self as u8) as usize] as usize;
-                &SYMBOLS_SLICE[start..end]
+                unsafe {
+                    // Safety: we generated those limits and are inside the string
+                    SYMBOLS_SLICE.get_unchecked(start .. end)
+                }
             }
 
             pub const fn digest(self, s: Symbol) -> Option<Self> {
