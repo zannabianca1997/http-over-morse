@@ -12,6 +12,8 @@ use signals_to_letters::SignalsToLetters;
 pub use wire_to_segments::ListeningPinCallback;
 use wire_to_segments::WireToSegments;
 
+use crate::strategies::{Error, ToBytes};
+
 pub mod letters_to_bytes;
 pub mod segments_to_signals;
 pub mod signals_to_letters;
@@ -37,7 +39,7 @@ where
     Strategy: crate::strategies::Strategy,
 {
     type Ok = u8;
-    type Err = Infallible;
+    type Err = Error<Infallible, <Strategy::ToBytes as ToBytes>::Error>;
 
     fn poll(&mut self) -> nb::Result<Self::Ok, Self::Err> {
         self.0.poll()

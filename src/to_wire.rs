@@ -13,6 +13,8 @@ use segments_to_wire::SegmentsToWire;
 pub use segments_to_wire::TimerCallback;
 use signals_to_segments::SignalsToSegments;
 
+use crate::strategies::{Error, ToLetters};
+
 pub mod bytes_to_letters;
 pub mod letters_to_signals;
 pub mod segments_to_wire;
@@ -38,7 +40,7 @@ where
     Tx: OutputPin<Error = Infallible>,
 {
     type Ok = NoItemProduced;
-    type Err = Inner::Err;
+    type Err = Error<Inner::Err, <Strategy::ToLetters as ToLetters>::Error>;
 
     fn poll(&mut self) -> nb::Result<Self::Ok, Self::Err> {
         self.0.poll()

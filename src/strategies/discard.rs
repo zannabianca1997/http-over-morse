@@ -2,6 +2,8 @@
 //!
 //! Simple test strategy for human input
 
+use core::convert::Infallible;
+
 use super::{Strategy, ToBytes, ToLetters, sealed};
 
 use encoding::LetterOrSpace;
@@ -19,15 +21,16 @@ impl Strategy for Discard {
 }
 
 impl ToLetters for Discard {
+    type Error = Infallible;
     fn new() -> Self {
         Self
     }
     fn process<E>(
         &mut self,
         mut feed: impl FnMut() -> nb::Result<u8, E>,
-    ) -> nb::Result<LetterOrSpace, E> {
+    ) -> nb::Result<LetterOrSpace, super::Error<E, Infallible>> {
         loop {
-            let mut ch = feed()?;
+            let mut ch = feed().map_err(|err| err.map(super::Error::Inner))?;
 
             if ch.is_ascii_whitespace() {
                 ch = b' '
@@ -43,13 +46,16 @@ impl ToLetters for Discard {
 }
 
 impl ToBytes for Discard {
+    type Error = Infallible;
     fn new() -> Self {
         Self
     }
     fn process<E>(
         &mut self,
         mut feed: impl FnMut() -> nb::Result<LetterOrSpace, E>,
-    ) -> nb::Result<u8, E> {
-        feed().map(LetterOrSpace::char)
+    ) -> nb::Result<u8, super::Error<E, Infallible>> {
+        feed()
+            .map(LetterOrSpace::char)
+            .map_err(|err| err.map(super::Error::Inner))
     }
 }

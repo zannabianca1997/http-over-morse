@@ -3,7 +3,7 @@
 use encoding::LetterOrSpace;
 use process::Process;
 
-use crate::strategies::{Strategy, ToBytes};
+use crate::strategies::{Error, Strategy, ToBytes};
 
 pub struct LettersToBytes<Inner, S: Strategy> {
     inner: Inner,
@@ -25,7 +25,7 @@ where
     S: Strategy,
 {
     type Ok = u8;
-    type Err = Inner::Err;
+    type Err = Error<Inner::Err, <S::ToBytes as ToBytes>::Error>;
 
     fn poll(&mut self) -> nb::Result<Self::Ok, Self::Err> {
         self.data.process(|| self.inner.poll())

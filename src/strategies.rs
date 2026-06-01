@@ -22,17 +22,24 @@ pub trait Strategy: sealed::Sealed {
 }
 
 pub trait ToLetters {
+    type Error;
     fn new() -> Self;
     fn process<E>(
         &mut self,
         feed: impl FnMut() -> nb::Result<u8, E>,
-    ) -> nb::Result<LetterOrSpace, E>;
+    ) -> nb::Result<LetterOrSpace, Error<E, Self::Error>>;
 }
 
 pub trait ToBytes {
+    type Error;
     fn new() -> Self;
     fn process<E>(
         &mut self,
         feed: impl FnMut() -> nb::Result<LetterOrSpace, E>,
-    ) -> nb::Result<u8, E>;
+    ) -> nb::Result<u8, Error<E, Self::Error>>;
+}
+
+pub enum Error<Inner, Strategy> {
+    Inner(Inner),
+    Strategy(Strategy),
 }

@@ -3,7 +3,7 @@
 use encoding::LetterOrSpace;
 use process::Process;
 
-use crate::strategies::{Strategy, ToLetters};
+use crate::strategies::{Error, Strategy, ToLetters};
 
 /// Read morse letters from a byte source
 pub struct BytesToLetters<Inner, S: Strategy> {
@@ -26,7 +26,7 @@ where
     S: Strategy,
 {
     type Ok = LetterOrSpace;
-    type Err = Inner::Err;
+    type Err = Error<Inner::Err, <S::ToLetters as ToLetters>::Error>;
 
     fn poll(&mut self) -> nb::Result<Self::Ok, Self::Err> {
         self.data.process(|| self.inner.poll())

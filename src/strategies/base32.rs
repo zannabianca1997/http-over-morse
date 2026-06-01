@@ -2,7 +2,7 @@
 //!
 //! Alphabet is: A-Z,0
 
-use core::hint::cold_path;
+use core::{convert::Infallible, hint::cold_path};
 
 use super::{Strategy, ToBytes, ToLetters, sealed};
 
@@ -32,6 +32,8 @@ impl Decode {
 }
 
 impl ToBytes for Decode {
+    type Error = Infallible;
+
     fn new() -> Self {
         Self {
             len: 0,
@@ -42,11 +44,11 @@ impl ToBytes for Decode {
     fn process<E>(
         &mut self,
         mut feed: impl FnMut() -> nb::Result<LetterOrSpace, E>,
-    ) -> nb::Result<u8, E> {
+    ) -> nb::Result<u8, super::Error<E, Self::Error>> {
         while self.len < 8 {
             // Pull in a new letter
 
-            let letter_or_space = feed()?;
+            let letter_or_space = feed().map_err(|err| err.map(super::Error::Inner))?;
 
             if let Some(letter) = letter_or_space.letter() {
                 let Some(u5) = Self::letter_to_u5(letter) else {
@@ -110,6 +112,8 @@ impl Encode {
 }
 
 impl ToLetters for Encode {
+    type Error = Infallible;
+
     fn new() -> Self {
         Self {
             len: 0,
@@ -121,7 +125,7 @@ impl ToLetters for Encode {
     fn process<E>(
         &mut self,
         mut feed: impl FnMut() -> nb::Result<u8, E>,
-    ) -> nb::Result<LetterOrSpace, E> {
+    ) -> nb::Result<LetterOrSpace, super::Error<E, Self::Error>> {
         if self.flushing {
             self.flushing = false;
             return Ok(LetterOrSpace::SPACE);
@@ -141,7 +145,7 @@ impl ToLetters for Encode {
                     self.flushing = true;
                     self.len = 5;
                 }
-                Err(err) => return Err(err),
+                Err(err) => return Err(err.map(super::Error::Inner)),
             };
         }
 
