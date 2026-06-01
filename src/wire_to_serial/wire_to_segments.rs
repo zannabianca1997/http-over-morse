@@ -1,12 +1,12 @@
 //! Read segments from the wire
 
-use core::{cell::Cell, convert::Infallible, num::NonZero};
+use core::{convert::Infallible, num::NonZero};
 
-use avr_device::interrupt::{CriticalSection, Mutex, free};
+use avr_device::interrupt::CriticalSection;
 use embedded_hal::digital::PinState;
 
 use crate::{
-    encoding::{SYMBOL_SPACE_LENGTH, WORD_SPACE_LENGTH, threshold},
+    encoding::WORD_SPACE_LENGTH,
     listening_pin::{Edge, ListeningPin},
     process::Process,
     segments::Segment,
@@ -17,16 +17,17 @@ use crate::{
     utils::ringbuf::Buffer,
 };
 
+/// Callback to the listening pin
+///
+/// Only one of these can exist at a time, guaranteed by the fact that only one
+/// stopwatch exists
 pub struct ListeningPinCallback {
     stopwatch: StopwatchReset,
 }
 
 impl ListeningPinCallback {
+    /// Create a new callback
     pub fn new(stopwatch: StopwatchReset) -> Self {
-        if free(|cs| BUFFER_WRITE_RIGHTS_TAKEN.borrow(cs).replace(true)) {
-            panic!("Cannot create two callbacks")
-        }
-
         Self { stopwatch }
     }
 }
@@ -57,8 +58,6 @@ impl crate::listening_pin::ListeningPinCallback for ListeningPinCallback {
 }
 
 static BUFFER: Buffer<Segment, 16> = Buffer::new();
-
-static BUFFER_WRITE_RIGHTS_TAKEN: Mutex<Cell<bool>> = Mutex::new(Cell::new(false));
 
 pub struct WireToSegments {
     pin: ListeningPin<ListeningPinCallback>,

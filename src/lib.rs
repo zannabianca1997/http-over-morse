@@ -99,7 +99,12 @@ where
                 stopwatch: Stopwatch { reset, overflow },
             },
             clock_interrupts,
-        ) = time::Clock::new(timer, TimerCallback::new(tx));
+        ) = time::Clock::new(timer, unsafe {
+            // Safety: we know this function is called only once as many of it's
+            // parameters are singletons (e.g. timer, rx, external_interrupts)
+            // and it's not reentrant
+            TimerCallback::new(tx)
+        });
 
         // Setup the pin to listen
         let (listening_pin, listening_pin_interrupts) = listening_pin::ListeningPin::new(

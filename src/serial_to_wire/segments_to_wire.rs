@@ -1,8 +1,8 @@
 //! Write segments to the wire
 
-use core::{cell::Cell, convert::Infallible, num::NonZero};
+use core::{convert::Infallible, num::NonZero};
 
-use avr_device::interrupt::{CriticalSection, Mutex, free};
+use avr_device::interrupt::CriticalSection;
 use embedded_hal::digital::OutputPin;
 
 use crate::{
@@ -17,18 +17,16 @@ pub struct TimerCallback<Tx> {
 }
 
 impl<Tx> TimerCallback<Tx> {
-    pub fn new(pin: Tx) -> Self {
-        if free(|cs| BUFFER_READ_RIGHTS_TAKEN.borrow(cs).replace(true)) {
-            panic!("Cannot create two callbacks")
-        }
-
+    /// Create a new callback
+    ///
+    /// Safety: the caller must ensure only one callback exists, as it has write
+    /// rights on the global buffer.
+    pub unsafe fn new(pin: Tx) -> Self {
         Self { pin }
     }
 }
 
 static BUFFER: Buffer<Segment, 16> = Buffer::new();
-
-static BUFFER_READ_RIGHTS_TAKEN: Mutex<Cell<bool>> = Mutex::new(Cell::new(false));
 
 impl<Tx> time::TimerCallback for TimerCallback<Tx>
 where
