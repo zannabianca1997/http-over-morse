@@ -58,7 +58,10 @@ mod wire_to_serial {
 }
 
 /// Firmware
-pub struct App<SerialReader, SerialWriter, WireTx, Strategy: strategies::Strategy> {
+pub struct App<SerialReader, SerialWriter, WireTx, Strategy: strategies::Strategy>
+where
+    SerialReader: Read<u8>,
+{
     serial_to_wire: SegmentsToWire<
         SignalsToSegments<LettersToSignals<BytesToLetters<SerialReader, Strategy>>>,
         WireTx,
@@ -77,6 +80,8 @@ pub type Interrupts<WireTx> = (
 
 impl<SerialReader, SerialWriter, WireTx, S: strategies::Strategy>
     App<SerialReader, SerialWriter, WireTx, S>
+where
+    SerialReader: Read<u8>,
 {
     /// Initialize the application
     pub fn new(

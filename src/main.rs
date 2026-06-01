@@ -21,7 +21,7 @@ type App = http_over_morse::App<
     UsartReader<USART0, Pin<Input, D0>, Pin<Output, D1>>,
     UsartWriter<USART0, Pin<Input, D0>, Pin<Output, D1>>,
     Pin<Output, D13>,
-    strategies::Base32,
+    strategies::Discard,
 >;
 
 type Interrupts = http_over_morse::Interrupts<Pin<Output, D13>>;

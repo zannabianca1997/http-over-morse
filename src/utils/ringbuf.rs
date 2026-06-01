@@ -36,7 +36,7 @@ pub struct Buffer<T, const CAP: usize> {
 ///
 /// For this to be safe to interact with, only a single [`Writer`] must exist at
 /// the same time
-pub struct Writer<'b, T, const CAP: usize, CS> {
+pub struct Writer<'b, T, const CAP: usize, CS = NoCriticalSection> {
     buffer: &'b Buffer<T, CAP>,
     cs: CS,
 }
@@ -45,7 +45,7 @@ pub struct Writer<'b, T, const CAP: usize, CS> {
 ///
 /// For this to be safe to interact with, only a single [`Reader`] must exist at
 /// the same time
-pub struct Reader<'b, T, const CAP: usize, CS> {
+pub struct Reader<'b, T, const CAP: usize, CS = NoCriticalSection> {
     buffer: &'b Buffer<T, CAP>,
     cs: CS,
 }
@@ -85,11 +85,27 @@ impl<T, const CAP: usize> Buffer<T, CAP> {
         }
     }
 
+    /// Get both handlers to the buffer.
+    ///
+    /// Ensure uniqueness by taking a mutable reference
+    pub fn split(&mut self) -> (Writer<'_, T, CAP>, Reader<'_, T, CAP>) {
+        (
+            Writer {
+                buffer: self,
+                cs: NoCriticalSection,
+            },
+            Reader {
+                buffer: self,
+                cs: NoCriticalSection,
+            },
+        )
+    }
+
     /// Get a writing handle to this buffer
     ///
     /// Safety: the caller must ensure that only a single [`Writer`] pointing to
     /// the same buffer exists.
-    pub const unsafe fn writer(&self) -> Writer<'_, T, CAP, NoCriticalSection> {
+    pub const unsafe fn writer(&self) -> Writer<'_, T, CAP> {
         Writer {
             buffer: self,
             cs: NoCriticalSection,
@@ -115,7 +131,7 @@ impl<T, const CAP: usize> Buffer<T, CAP> {
     ///
     /// Safety: the caller must ensure that only a single [`Reader`] pointing to
     /// the same buffer exists.
-    pub const unsafe fn reader(&self) -> Reader<'_, T, CAP, NoCriticalSection> {
+    pub const unsafe fn reader(&self) -> Reader<'_, T, CAP> {
         Reader {
             buffer: self,
             cs: NoCriticalSection,

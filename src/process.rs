@@ -1,4 +1,5 @@
 pub mod pipe_to_writer;
+pub mod buffer_output;
 
 /// A running process
 pub trait Process {
