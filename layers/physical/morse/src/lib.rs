@@ -218,101 +218,107 @@ impl LetterOrProsign {
 
 // = Casts to the lower types
 
+// SAFETY: as the enums variants are all aligned by the codegen, the transmute
+// is always safe once the first group has been checked
+
 impl TryFrom<LetterOrProsign> for Letter {
     type Error = Prosign;
     fn try_from(value: LetterOrProsign) -> Result<Self, Self::Error> {
-        Self::new(value as u8).ok_or_else(|| Self::Error::new(value as u8).unwrap())
+        Self::new(value as u8).ok_or_else(|| unsafe { mem::transmute(value) })
     }
 }
 impl TryFrom<LetterOrProsign> for Prosign {
     type Error = Letter;
     fn try_from(value: LetterOrProsign) -> Result<Self, Self::Error> {
-        Self::new(value as u8).ok_or_else(|| Self::Error::new(value as u8).unwrap())
+        Self::new(value as u8).ok_or_else(|| unsafe { mem::transmute(value) })
     }
 }
 impl TryFrom<LetterOrSpace> for Letter {
     type Error = WordSpace;
     fn try_from(value: LetterOrSpace) -> Result<Self, Self::Error> {
-        Self::new(value as u8).ok_or_else(|| Self::Error::new(value as u8).unwrap())
+        Self::new(value as u8).ok_or_else(|| unsafe { mem::transmute(value) })
     }
 }
 impl TryFrom<LetterOrSpace> for WordSpace {
     type Error = Letter;
     fn try_from(value: LetterOrSpace) -> Result<Self, Self::Error> {
-        Self::new(value as u8).ok_or_else(|| Self::Error::new(value as u8).unwrap())
+        Self::new(value as u8).ok_or_else(|| unsafe { mem::transmute(value) })
     }
 }
 impl TryFrom<LetterOrProsignOrSpace> for WordSpace {
     type Error = LetterOrProsign;
     fn try_from(value: LetterOrProsignOrSpace) -> Result<Self, Self::Error> {
-        Self::new(value as u8).ok_or_else(|| Self::Error::new(value as u8).unwrap())
+        Self::new(value as u8).ok_or_else(|| unsafe { mem::transmute(value) })
     }
 }
 impl TryFrom<LetterOrProsignOrSpace> for LetterOrProsign {
     type Error = WordSpace;
     fn try_from(value: LetterOrProsignOrSpace) -> Result<Self, Self::Error> {
-        Self::new(value as u8).ok_or_else(|| Self::Error::new(value as u8).unwrap())
+        Self::new(value as u8).ok_or_else(|| unsafe { mem::transmute(value) })
     }
 }
 impl TryFrom<LetterOrProsignOrSpace> for LetterOrSpace {
     type Error = Prosign;
     fn try_from(value: LetterOrProsignOrSpace) -> Result<Self, Self::Error> {
-        Self::new(value as u8).ok_or_else(|| Self::Error::new(value as u8).unwrap())
+        Self::new(value as u8).ok_or_else(|| unsafe { mem::transmute(value) })
     }
 }
 
 // = Casts to the larger types
 
+// SAFETY: as the enums variants are all aligned by the codegen, the transmute
+// is always safe being a subset of the larger type
+
 impl From<Letter> for LetterOrProsign {
     fn from(value: Letter) -> Self {
-        Self::new(value as u8).unwrap()
+        unsafe { mem::transmute(value) }
     }
 }
 
 impl From<Prosign> for LetterOrProsign {
     fn from(value: Prosign) -> Self {
-        Self::new(value as u8).unwrap()
+        unsafe { mem::transmute(value) }
     }
 }
 
 impl From<Letter> for LetterOrSpace {
     fn from(value: Letter) -> Self {
-        Self::new(value as u8).unwrap()
+        unsafe { mem::transmute(value) }
     }
 }
 
 impl From<WordSpace> for LetterOrSpace {
     fn from(value: WordSpace) -> Self {
-        Self::new(value as u8).unwrap()
+        unsafe { mem::transmute(value) }
     }
 }
 
 impl From<Letter> for LetterOrProsignOrSpace {
     fn from(value: Letter) -> Self {
-        Self::new(value as u8).unwrap()
+        unsafe { mem::transmute(value) }
     }
 }
 
 impl From<LetterOrProsign> for LetterOrProsignOrSpace {
     fn from(value: LetterOrProsign) -> Self {
-        Self::new(value as u8).unwrap()
+        unsafe { mem::transmute(value) }
     }
 }
 
 impl From<LetterOrSpace> for LetterOrProsignOrSpace {
     fn from(value: LetterOrSpace) -> Self {
-        Self::new(value as u8).unwrap()
+        unsafe { mem::transmute(value) }
     }
 }
 
 impl From<Prosign> for LetterOrProsignOrSpace {
     fn from(value: Prosign) -> Self {
-        Self::new(value as u8).unwrap()
+        unsafe { mem::transmute(value) }
     }
 }
 
 impl From<WordSpace> for LetterOrProsignOrSpace {
     fn from(value: WordSpace) -> Self {
-        Self::new(value as u8).unwrap()
+        unsafe { mem::transmute(value) }
     }
 }
