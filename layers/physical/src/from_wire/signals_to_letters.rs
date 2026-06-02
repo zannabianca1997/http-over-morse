@@ -4,7 +4,7 @@ use core::hint::cold_path;
 
 use process::Process;
 
-use morse::{Decoder, LetterOrSpace, Signal, WORD_SPACE};
+use morse::{Decoder, LetterOrProsignOrSpace, Signal, WORD_SPACE};
 
 pub struct SignalsToLetters<Inner> {
     inner: Inner,
@@ -26,14 +26,14 @@ impl<Inner> Process for SignalsToLetters<Inner>
 where
     Inner: Process<Ok = Signal>,
 {
-    type Ok = LetterOrSpace;
+    type Ok = LetterOrProsignOrSpace;
     type Err = Inner::Err;
 
     fn poll(&mut self) -> nb::Result<Self::Ok, Self::Err> {
         loop {
             if self.space_pushback {
                 self.space_pushback = false;
-                return Ok(LetterOrSpace::SPACE);
+                return Ok(LetterOrProsignOrSpace::Space);
             }
 
             let signal = self.inner.poll()?;

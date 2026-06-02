@@ -1,10 +1,12 @@
 use std::{
+    collections::BTreeMap,
     env,
     fs::{self, File},
+    num::{NonZero, NonZeroU8},
     path::PathBuf,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use quote::quote;
 
 mod src {
@@ -28,11 +30,14 @@ mod build {
     pub mod supersequence;
 }
 
-use crate::build::{
-    codegen::{is_morse_letter, static_symbols_slice},
-    decode::decode,
-    grammar::Grammar,
-    supersequence::supersequence,
+use crate::{
+    build::{
+        codegen::{enums, static_symbols_slice},
+        decode::decode,
+        grammar::{Grammar, Prosign},
+        supersequence::supersequence,
+    },
+    src::symbol::Symbol,
 };
 
 fn main() -> Result<()> {
@@ -47,17 +52,36 @@ fn main() -> Result<()> {
 
     // == Code generation ==
 
-    let Grammar { letters, .. } = Grammar::load()?;
+    let Grammar { letters, prosigns } = Grammar::load()?;
 
-    let (symbols_slice, definitions) = supersequence(letters);
+    let mut definitions: BTreeMap<NonZeroU8, Vec<Symbol>> = letters.clone().into_iter().collect();
+
+    for (name, Prosign { code, maps_to }) in &prosigns {
+        if definitions.contains_key(&maps_to) {
+            bail!("Prosign {name} maps to occupied value")
+        }
+
+        let mut symbols: Vec<Symbol> = vec![];
+        for ch in code.bytes() {
+            let ch_symbols = definitions
+                .get(&NonZero::new(ch).context("\\0 is not valid in prosigns")?)
+                .context("Prosign contains unknown letter")?;
+            symbols.extend(ch_symbols);
+        }
+
+        definitions.insert(*maps_to, symbols);
+    }
+
+    let (symbols_slice, definitions) = supersequence(definitions);
 
     let static_symbols_slice = static_symbols_slice(&symbols_slice);
-    let is_morse_letter = is_morse_letter(&definitions);
     let decode = decode(&definitions, &symbols_slice)?;
+    let enums = enums(&letters, &prosigns);
+
     let generated = quote! {
         #static_symbols_slice
-        #is_morse_letter
         #decode
+        #enums
     };
 
     let out = PathBuf::from(env::var("OUT_DIR").context("Cargo should set OUT_DIR")?)

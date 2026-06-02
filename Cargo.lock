@@ -456,6 +456,7 @@ name = "layer-physical"
 version = "0.1.0"
 dependencies = [
  "avr-device",
+ "either",
  "embedded-hal 1.0.0",
  "encoding",
  "listening_pin",
@@ -509,6 +510,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "stringcase",
  "time",
  "toml",
 ]
@@ -867,6 +869,12 @@ name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
+
+[[package]]
+name = "stringcase"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72abeda133c49d7bddece6c154728f83eec8172380c80ab7096da9487e20d27c"
 
 [[package]]
 name = "svd-encoder"

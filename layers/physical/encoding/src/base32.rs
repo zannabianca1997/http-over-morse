@@ -6,7 +6,7 @@ use core::{convert::Infallible, hint::cold_path};
 
 use super::{Strategy, ToBytes, ToLetters, sealed};
 
-use morse::{Letter, LetterOrSpace};
+use morse::{Letter, LetterOrSpace, WordSpace};
 
 pub enum Base32 {}
 impl sealed::Sealed for Base32 {}
@@ -23,7 +23,7 @@ pub struct Decode {
 impl Decode {
     /// Decode a letter into the last five bits of a u8
     const fn letter_to_u5(letter: Letter) -> Option<u8> {
-        Some(match letter.char() {
+        Some(match letter as u8 {
             ch @ b'A'..=b'Z' => ch - b'A',
             dg @ b'0'..=b'5' => dg - (b'0' + b'A' - b'Z' - 1),
             _ => return None,
@@ -50,31 +50,34 @@ impl ToBytes for Decode {
 
             let letter_or_space = feed().map_err(|err| err.map(super::Error::Inner))?;
 
-            if let Some(letter) = letter_or_space.letter() {
-                let Some(u5) = Self::letter_to_u5(letter) else {
-                    // TODO: handle errors what to do when we receive a letter
-                    // that's not a b32 letter?
+            match Letter::try_from(letter_or_space) {
+                Ok(letter) => {
+                    let Some(u5) = Self::letter_to_u5(letter) else {
+                        // TODO: handle errors what to do when we receive a letter
+                        // that's not a b32 letter?
 
-                    cold_path();
-                    // Skipping for now
-                    continue;
-                };
+                        cold_path();
+                        // Skipping for now
+                        continue;
+                    };
 
-                self.bits |= (u5 as u16) << self.len;
-                self.len += 5;
-            } else {
-                // Space: flushing. len should be zero if the connection was good
-                if self.len == 0 {
-                    // Good. trying to fetch a new letter to start the new stream
-                    continue;
-                } else {
-                    // Ouch. Additional bits...
-                    // TODO: handle errors. What to do when we received additional bytes?
+                    self.bits |= (u5 as u16) << self.len;
+                    self.len += 5;
+                }
+                Err(WordSpace::Space) => {
+                    // Space: flushing. len should be zero if the connection was good
+                    if self.len == 0 {
+                        // Good. trying to fetch a new letter to start the new stream
+                        continue;
+                    } else {
+                        // Ouch. Additional bits...
+                        // TODO: handle errors. What to do when we received additional bytes?
 
-                    cold_path();
-                    // Ignoring them for now
-                    self.bits = 0;
-                    self.len = 0;
+                        cold_path();
+                        // Ignoring them for now
+                        self.bits = 0;
+                        self.len = 0;
+                    }
                 }
             }
         }
@@ -128,7 +131,7 @@ impl ToLetters for Encode {
     ) -> nb::Result<LetterOrSpace, super::Error<E, Self::Error>> {
         if self.flushing {
             self.flushing = false;
-            return Ok(LetterOrSpace::SPACE);
+            return Ok(LetterOrSpace::Space);
         }
 
         if self.len < 5 {
@@ -187,7 +190,7 @@ const _: () = const {
         let recovered = Encode::u5_to_letter(byte);
 
         assert!(
-            letter.char() == recovered.char(),
+            letter as u8 == recovered as u8,
             "A letter did not roundtrip"
         );
 

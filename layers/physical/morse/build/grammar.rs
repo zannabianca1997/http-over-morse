@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     fs,
     num::{NonZero, NonZeroU8},
 };
@@ -21,7 +21,7 @@ pub struct Grammar {
 
     /// Prosigns made of those letters
     #[serde(default)]
-    pub prosigns: HashMap<String, Prosign>,
+    pub prosigns: BTreeMap<String, Prosign>,
 }
 
 impl Grammar {
@@ -34,7 +34,7 @@ impl Grammar {
     }
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Default)]
 #[serde(try_from = "BTreeMap<String, String>")]
 pub struct Letters(BTreeMap<NonZeroU8, Vec<Symbol>>);
 

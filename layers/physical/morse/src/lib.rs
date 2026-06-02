@@ -7,7 +7,6 @@
 
 use core::mem;
 use core::num::NonZero;
-use core::num::NonZeroU8;
 
 use time::{MILLIS_FOR_TICK, Time};
 
@@ -17,7 +16,9 @@ mod generated {
 
     include! {env!("MORSE_GENERATED_RS")}
 }
-use generated::DecodeState;
+pub use generated::{
+    Letter, LetterOrProsign, LetterOrProsignOrSpace, LetterOrSpace, Prosign, WordSpace,
+};
 
 mod symbol;
 pub use symbol::{DOT, LINE, Symbol};
@@ -50,6 +51,8 @@ pub enum Space {
 pub use Space::LETTER as LETTER_SPACE;
 pub use Space::WORD as WORD_SPACE;
 
+use crate::generated::DecodeState;
+
 pub const SYMBOL_SPACE_LENGTH: NonZero<Time> = time_multiple(DOT_LENGTH, 1);
 pub const LETTER_SPACE_LENGTH: NonZero<Time> = time_multiple(SYMBOL_SPACE_LENGTH, 3);
 pub const WORD_SPACE_LENGTH: NonZero<Time> = time_multiple(SYMBOL_SPACE_LENGTH, 7);
@@ -80,75 +83,6 @@ pub const fn threshold(a: NonZero<Time>, b: NonZero<Time>) -> NonZero<Time> {
 pub enum Signal {
     Symbol(Symbol),
     Space(Space),
-}
-
-/// A valid morse letter
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Letter(NonZeroU8);
-
-impl Letter {
-    pub const fn new(ch: u8) -> Option<Self> {
-        if generated::is_morse_letter(ch) {
-            Some(Self(
-                NonZeroU8::new(ch).expect("`\\0` is not a valid morse letter"),
-            ))
-        } else {
-            None
-        }
-    }
-
-    pub const fn char(self) -> u8 {
-        self.0.get()
-    }
-
-    pub const fn symbols(self) -> &'static nunny::Slice<Symbol> {
-        let state: DecodeState = unsafe {
-            // Safety: DecodeState has `#[repr(u8)]` on it, and all variants
-            // that corresponds to complete chars have their variant set to the
-            // right value
-            mem::transmute(self.char())
-        };
-        unsafe {
-            // Safety: all letters have a non-empty list of symbols
-            nunny::Slice::new_unchecked(state.symbols())
-        }
-    }
-}
-
-/// A valid morse letter, or a word space
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct LetterOrSpace(NonZeroU8);
-
-impl LetterOrSpace {
-    pub const SPACE: LetterOrSpace = LetterOrSpace(NonZeroU8::new(b' ').unwrap());
-
-    pub const fn new(ch: u8) -> Option<Self> {
-        if ch == b' ' {
-            Some(Self::SPACE)
-        } else if let Some(letter) = Letter::new(ch) {
-            Some(Self(letter.0))
-        } else {
-            None
-        }
-    }
-
-    pub const fn letter(self) -> Option<Letter> {
-        if self.0.get() == b' ' {
-            None
-        } else {
-            Some(Letter(self.0))
-        }
-    }
-
-    pub const fn char(self) -> u8 {
-        self.0.get()
-    }
-}
-
-impl From<Letter> for LetterOrSpace {
-    fn from(value: Letter) -> Self {
-        LetterOrSpace(value.0)
-    }
 }
 
 /// Decoder state machine
@@ -195,11 +129,13 @@ impl Decoder {
     /// Finish and get the decoded letter
     ///
     /// This will reset the machine, even in the case of an error
-    pub const fn finish(&mut self) -> Result<Letter, InvalidLetter> {
+    pub const fn finish(&mut self) -> Result<LetterOrProsign, InvalidLetter> {
         let res = match self.inner.finish() {
-            Some(value) => Ok({
-                // we know this is okay, the state machine emits only valid morse letters
-                Letter(NonZeroU8::new(value).unwrap())
+            Some(value) => Ok(unsafe {
+                // Safety: we know this is okay, the state machine emits only
+                // valid morse letters or prosigns, and the enums have the same
+                // representation as the bytes
+                mem::transmute(value)
             }),
             None => Err(InvalidLetter { state: self.inner }),
         };
@@ -235,5 +171,142 @@ impl InvalidLetter {
     /// All symbols emitted
     pub const fn symbols(&self) -> &'static [Symbol] {
         self.state.symbols()
+    }
+}
+
+// = Symbol accessors
+
+impl Letter {
+    pub const fn symbols(&self) -> &'static nunny::Slice<Symbol> {
+        let state = unsafe {
+            // Safety: all letters are valid states
+            mem::transmute::<_, DecodeState>(*self)
+        };
+
+        unsafe {
+            // Safety: all letters have at least a symbol
+            nunny::Slice::new_unchecked(state.symbols())
+        }
+    }
+}
+impl Prosign {
+    pub const fn symbols(&self) -> &'static nunny::Slice<Symbol> {
+        let state = unsafe {
+            // Safety: all prosigns are valid states
+            mem::transmute::<_, DecodeState>(*self)
+        };
+
+        unsafe {
+            // Safety: all prosigns have at least a symbol
+            nunny::Slice::new_unchecked(state.symbols())
+        }
+    }
+}
+impl LetterOrProsign {
+    pub const fn symbols(&self) -> &'static nunny::Slice<Symbol> {
+        let state = unsafe {
+            // Safety: all letter and prosigns are valid states
+            mem::transmute::<_, DecodeState>(*self)
+        };
+
+        unsafe {
+            // Safety: all letter and prosigns have at least a symbol
+            nunny::Slice::new_unchecked(state.symbols())
+        }
+    }
+}
+
+// = Casts to the lower types
+
+impl TryFrom<LetterOrProsign> for Letter {
+    type Error = Prosign;
+    fn try_from(value: LetterOrProsign) -> Result<Self, Self::Error> {
+        Self::new(value as u8).ok_or_else(|| Self::Error::new(value as u8).unwrap())
+    }
+}
+impl TryFrom<LetterOrProsign> for Prosign {
+    type Error = Letter;
+    fn try_from(value: LetterOrProsign) -> Result<Self, Self::Error> {
+        Self::new(value as u8).ok_or_else(|| Self::Error::new(value as u8).unwrap())
+    }
+}
+impl TryFrom<LetterOrSpace> for Letter {
+    type Error = WordSpace;
+    fn try_from(value: LetterOrSpace) -> Result<Self, Self::Error> {
+        Self::new(value as u8).ok_or_else(|| Self::Error::new(value as u8).unwrap())
+    }
+}
+impl TryFrom<LetterOrSpace> for WordSpace {
+    type Error = Letter;
+    fn try_from(value: LetterOrSpace) -> Result<Self, Self::Error> {
+        Self::new(value as u8).ok_or_else(|| Self::Error::new(value as u8).unwrap())
+    }
+}
+impl TryFrom<LetterOrProsignOrSpace> for WordSpace {
+    type Error = LetterOrProsign;
+    fn try_from(value: LetterOrProsignOrSpace) -> Result<Self, Self::Error> {
+        Self::new(value as u8).ok_or_else(|| Self::Error::new(value as u8).unwrap())
+    }
+}
+impl TryFrom<LetterOrProsignOrSpace> for LetterOrProsign {
+    type Error = WordSpace;
+    fn try_from(value: LetterOrProsignOrSpace) -> Result<Self, Self::Error> {
+        Self::new(value as u8).ok_or_else(|| Self::Error::new(value as u8).unwrap())
+    }
+}
+impl TryFrom<LetterOrProsignOrSpace> for LetterOrSpace {
+    type Error = Prosign;
+    fn try_from(value: LetterOrProsignOrSpace) -> Result<Self, Self::Error> {
+        Self::new(value as u8).ok_or_else(|| Self::Error::new(value as u8).unwrap())
+    }
+}
+
+// = Casts to the larger types
+
+impl From<Letter> for LetterOrProsign {
+    fn from(value: Letter) -> Self {
+        Self::new(value as u8).unwrap()
+    }
+}
+
+impl From<Prosign> for LetterOrProsign {
+    fn from(value: Prosign) -> Self {
+        Self::new(value as u8).unwrap()
+    }
+}
+
+impl From<Letter> for LetterOrSpace {
+    fn from(value: Letter) -> Self {
+        Self::new(value as u8).unwrap()
+    }
+}
+
+impl From<WordSpace> for LetterOrSpace {
+    fn from(value: WordSpace) -> Self {
+        Self::new(value as u8).unwrap()
+    }
+}
+
+impl From<Letter> for LetterOrProsignOrSpace {
+    fn from(value: Letter) -> Self {
+        Self::new(value as u8).unwrap()
+    }
+}
+
+impl From<LetterOrProsign> for LetterOrProsignOrSpace {
+    fn from(value: LetterOrProsign) -> Self {
+        Self::new(value as u8).unwrap()
+    }
+}
+
+impl From<Prosign> for LetterOrProsignOrSpace {
+    fn from(value: Prosign) -> Self {
+        Self::new(value as u8).unwrap()
+    }
+}
+
+impl From<WordSpace> for LetterOrProsignOrSpace {
+    fn from(value: WordSpace) -> Self {
+        Self::new(value as u8).unwrap()
     }
 }

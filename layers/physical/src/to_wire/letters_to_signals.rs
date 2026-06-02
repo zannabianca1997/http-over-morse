@@ -2,7 +2,7 @@
 
 use process::Process;
 
-use morse::{LETTER_SPACE, LetterOrSpace, Signal, Symbol, WORD_SPACE};
+use morse::{LETTER_SPACE, Letter, LetterOrProsignOrSpace, Signal, Symbol, WORD_SPACE, WordSpace};
 
 pub struct LettersToSignals<Inner> {
     inner: Inner,
@@ -22,7 +22,7 @@ impl<Inner> LettersToSignals<Inner> {
 
 impl<Inner> Process for LettersToSignals<Inner>
 where
-    Inner: Process<Ok = LetterOrSpace>,
+    Inner: Process<Ok = LetterOrProsignOrSpace>,
 {
     type Ok = Signal;
     type Err = Inner::Err;
@@ -36,20 +36,20 @@ where
             return Ok(Signal::Symbol(*next));
         }
 
-        match self.inner.poll()?.letter() {
-            Some(letter) => {
+        match WordSpace::try_from(self.inner.poll()?) {
+            Err(letter_or_prosign) => {
                 if self.last_emitted_was_symbol {
-                    self.emitting = Some(letter.symbols());
+                    self.emitting = Some(letter_or_prosign.symbols());
                     self.last_emitted_was_symbol = false;
                     Ok(Signal::Space(LETTER_SPACE))
                 } else {
-                    let (next, rest) = letter.symbols().split_first();
+                    let (next, rest) = letter_or_prosign.symbols().split_first();
                     self.emitting = nunny::Slice::new(rest);
                     self.last_emitted_was_symbol = true;
                     return Ok(Signal::Symbol(*next));
                 }
             }
-            None => {
+            Ok(WordSpace::Space) => {
                 self.last_emitted_was_symbol = false;
                 Ok(Signal::Space(WORD_SPACE))
             }

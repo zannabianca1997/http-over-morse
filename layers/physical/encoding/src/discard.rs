@@ -55,7 +55,7 @@ impl ToBytes for Discard {
         mut feed: impl FnMut() -> nb::Result<LetterOrSpace, E>,
     ) -> nb::Result<u8, super::Error<E, Infallible>> {
         feed()
-            .map(LetterOrSpace::char)
+            .map(|l| l as u8)
             .map_err(|err| err.map(super::Error::Inner))
     }
 }
