@@ -40,7 +40,9 @@
       "properties": {
         "code": {
           "description": "Letters that make up this prosign",
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Z0-9]+$"
         },
         "maps_to": {
           "description": "Character this prosign is mapped to",

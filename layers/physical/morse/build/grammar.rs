@@ -2,7 +2,7 @@ use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap},
     fs,
-    num::NonZeroU8,
+    num::{NonZero, NonZeroU8},
 };
 
 use anyhow::{Context, Error, Result, anyhow, bail};
@@ -36,7 +36,7 @@ impl Grammar {
 
 #[derive(Debug, Deserialize, Default)]
 #[serde(try_from = "BTreeMap<String, String>")]
-pub struct Letters(BTreeMap<u8, Vec<Symbol>>);
+pub struct Letters(BTreeMap<NonZeroU8, Vec<Symbol>>);
 
 impl JsonSchema for Letters {
     fn schema_name() -> Cow<'static, str> {
@@ -89,6 +89,12 @@ impl TryFrom<BTreeMap<String, String>> for Letters {
                 )
             }
 
+            if ch.is_ascii_whitespace() {
+                bail!("Whitespace is reserved for internal use")
+            }
+
+            let ch = NonZero::new(ch).expect("\\0 is reserved for internal use");
+
             let symbols = symbols
                 .chars()
                 .map(|s| {
@@ -108,9 +114,9 @@ impl TryFrom<BTreeMap<String, String>> for Letters {
 }
 
 impl IntoIterator for Letters {
-    type Item = (u8, Vec<Symbol>);
+    type Item = (NonZero<u8>, Vec<Symbol>);
 
-    type IntoIter = <BTreeMap<u8, Vec<Symbol>> as IntoIterator>::IntoIter;
+    type IntoIter = <BTreeMap<NonZero<u8>, Vec<Symbol>> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
@@ -121,6 +127,7 @@ impl IntoIterator for Letters {
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct Prosign {
     /// Letters that make up this prosign
+    #[schemars(pattern(r#"^[A-Z0-9]+$"#), length(min = 1))]
     pub code: String,
 
     /// Character this prosign is mapped to

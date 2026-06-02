@@ -41,7 +41,10 @@ Z = "--.."
 
 # Morse code prosigns, mapped to similar meaning ascii bytes
 
-# Order follows the packet order: start -> heading -> break -> body -> out -> acknowledge/repeat
+# Order follows the packet order:
+# start -> heading -> break -> body -> out -> acknowledge/repeat
+
+# Source: https://en.wikipedia.org/wiki/Prosigns_for_Morse_code#Prosigns
 
 [prosigns.attention]
 code = "KA"

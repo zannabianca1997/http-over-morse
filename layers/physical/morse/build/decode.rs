@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     iter::once,
+    num::NonZero,
     range::Range,
 };
 
@@ -20,12 +21,15 @@ use crate::src::{
 
 struct StateData {
     name: Ident,
-    value: Option<u8>,
+    value: Option<NonZero<u8>>,
     range: Range<usize>,
     variant: Option<u8>,
 }
 
-pub fn decode(definitions: &[(u8, Range<usize>)], symbols_slice: &[Symbol]) -> Result<TokenStream> {
+pub fn decode(
+    definitions: &[(NonZero<u8>, Range<usize>)],
+    symbols_slice: &[Symbol],
+) -> Result<TokenStream> {
     let mut states = BTreeMap::from([(
         vec![],
         StateData {
@@ -52,7 +56,7 @@ pub fn decode(definitions: &[(u8, Range<usize>)], symbols_slice: &[Symbol]) -> R
             name: variant_name(symbols),
             value: Some(*value),
             range: *range,
-            variant: Some(*value),
+            variant: Some(value.get()),
         };
         states.insert(symbols.to_owned(), entry);
     }

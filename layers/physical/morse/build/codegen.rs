@@ -1,3 +1,5 @@
+use std::num::NonZero;
+
 use itertools::Itertools;
 use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote};
@@ -20,8 +22,10 @@ pub fn static_symbols_slice(symbols_slice: &[Symbol]) -> TokenStream {
     }
 }
 
-pub fn is_morse_letter(definitions: &[(u8, std::range::Range<usize>)]) -> TokenStream {
-    let defined = definitions.iter().map(|(c, _)| Literal::byte_character(*c));
+pub fn is_morse_letter(definitions: &[(NonZero<u8>, std::range::Range<usize>)]) -> TokenStream {
+    let defined = definitions
+        .iter()
+        .map(|(c, _)| Literal::byte_character(c.get()));
     quote! {
         pub(super) const fn is_morse_letter(ch: u8) -> bool {
             match ch {
