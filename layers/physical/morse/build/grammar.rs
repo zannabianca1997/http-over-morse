@@ -1,14 +1,27 @@
-use std::{collections::BTreeMap, fs};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, HashMap},
+    fs,
+    num::NonZeroU8,
+};
 
 use anyhow::{Context, Error, Result, anyhow, bail};
 use itertools::Itertools;
+use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::Deserialize;
 
 use crate::src::symbol::Symbol;
 
-#[derive(Debug, Deserialize)]
+/// The morse code definition
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct Grammar {
+    /// Letters we understand
+    #[serde(default)]
     pub letters: Letters,
+
+    /// Prosigns made of those letters
+    #[serde(default)]
+    pub prosigns: HashMap<String, Prosign>,
 }
 
 impl Grammar {
@@ -21,10 +34,38 @@ impl Grammar {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 #[serde(try_from = "BTreeMap<String, String>")]
-pub struct Letters {
-    defs: BTreeMap<u8, Vec<Symbol>>,
+pub struct Letters(BTreeMap<u8, Vec<Symbol>>);
+
+impl JsonSchema for Letters {
+    fn schema_name() -> Cow<'static, str> {
+        Cow::Borrowed("Letters")
+    }
+
+    fn schema_id() -> Cow<'static, str> {
+        Cow::Borrowed(concat!(module_path!(), "::Letters"))
+    }
+
+    fn json_schema(_gen: &mut SchemaGenerator) -> Schema {
+        json_schema!({
+            "description": "A map from single ASCII characters to their Morse code symbol sequences. Keys are automatically uppercased; lowercase keys will not be matched.",
+            "type": "object",
+            "additionalProperties": {
+                "type": "string",
+                "description": "A non-empty string composed exclusively of '.' (dot) and '-' (dash/line) characters.",
+                "pattern": "^[.\\-]+$",
+                "minLength": 1
+            },
+            "propertyNames": {
+                "description": "A single ASCII character (will be treated as uppercase).",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1,
+                "pattern": "^[\\u0000-\\u007F]$"
+            }
+        })
+    }
 }
 
 impl TryFrom<BTreeMap<String, String>> for Letters {
@@ -62,7 +103,7 @@ impl TryFrom<BTreeMap<String, String>> for Letters {
             defs.insert(ch, symbols);
         }
 
-        Ok(Self { defs })
+        Ok(Self(defs))
     }
 }
 
@@ -72,6 +113,17 @@ impl IntoIterator for Letters {
     type IntoIter = <BTreeMap<u8, Vec<Symbol>> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.defs.into_iter()
+        self.0.into_iter()
     }
+}
+
+/// A prosign: a series of letters without a space between.
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct Prosign {
+    /// Letters that make up this prosign
+    pub code: String,
+
+    /// Character this prosign is mapped to
+    #[schemars(range(max = 127))]
+    pub maps_to: NonZeroU8,
 }

@@ -1,4 +1,8 @@
-use std::{env, fs, path::PathBuf};
+use std::{
+    env,
+    fs::{self, File},
+    path::PathBuf,
+};
 
 use anyhow::{Context, Result};
 use quote::quote;
@@ -32,7 +36,18 @@ use crate::build::{
 };
 
 fn main() -> Result<()> {
-    let Grammar { letters } = Grammar::load()?;
+    // == Schema update ==
+
+    let schema = schemars::schema_for!(Grammar);
+    serde_json::to_writer_pretty(
+        File::create("build/schemas/grammar.json").context("Cannot open grammar schema file")?,
+        &schema,
+    )
+    .context("Cannot write grammar schema")?;
+
+    // == Code generation ==
+
+    let Grammar { letters, .. } = Grammar::load()?;
 
     let (symbols_slice, definitions) = supersequence(letters);
 

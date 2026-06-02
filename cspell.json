@@ -13,6 +13,8 @@
     "EXINT",
     "BAUDRATE",
     "ravedude",
-    "PHCACHE"
+    "PHCACHE",
+    "prosigns",
+    "prosign"
   ]
 }

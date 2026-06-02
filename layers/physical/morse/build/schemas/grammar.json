@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Grammar",
+  "description": "The morse code definition",
+  "type": "object",
+  "properties": {
+    "letters": {
+      "description": "Letters we understand",
+      "$ref": "#/$defs/Letters"
+    },
+    "prosigns": {
+      "description": "Prosigns made of those letters",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/Prosign"
+      }
+    }
+  },
+  "$defs": {
+    "Letters": {
+      "description": "A map from single ASCII characters to their Morse code symbol sequences. Keys are automatically uppercased; lowercase keys will not be matched.",
+      "type": "object",
+      "additionalProperties": {
+        "description": "A non-empty string composed exclusively of '.' (dot) and '-' (dash/line) characters.",
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[.\\-]+$"
+      },
+      "propertyNames": {
+        "description": "A single ASCII character (will be treated as uppercase).",
+        "type": "string",
+        "maxLength": 1,
+        "minLength": 1,
+        "pattern": "^[\\u0000-\\u007F]$"
+      }
+    },
+    "Prosign": {
+      "description": "A prosign: a series of letters without a space between.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "Letters that make up this prosign",
+          "type": "string"
+        },
+        "maps_to": {
+          "description": "Character this prosign is mapped to",
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 127,
+          "minimum": 1
+        }
+      },
+      "required": [
+        "code",
+        "maps_to"
+      ]
+    }
+  }
+}

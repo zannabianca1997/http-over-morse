@@ -38,3 +38,27 @@ Z = "--.."
 7 = "--..."
 8 = "---.."
 9 = "----."
+
+# Morse code prosigns, mapped to similar meaning ascii bytes
+
+# Order follows the packet order: start -> heading -> break -> body -> out -> acknowledge/repeat
+
+[prosigns.attention]
+code = "KA"
+maps_to = 1  # Start Of Heading
+
+[prosigns.break]
+code = "BT"
+maps_to = 2  # Start Of Text
+
+[prosigns.out]
+code = "AR"
+maps_to = 4  # End Of Transmission
+
+[prosigns.acknowledge]
+code = "VE"
+maps_to = 6  # Acknowledge
+
+[prosigns.negative_acknowledge]
+code = "INT"
+maps_to = 25  # Negative acknowledge
