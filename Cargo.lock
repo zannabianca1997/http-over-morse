@@ -305,27 +305,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "http-over-morse"
-version = "0.1.0"
-dependencies = [
- "arduino-hal",
- "avr-device",
- "cargo-emit",
- "embedded-hal 1.0.0",
- "encoding",
- "interrupts",
- "listening_pin",
- "morse",
- "nb 1.1.0",
- "nunny",
- "panic-halt",
- "process",
- "ringbuf",
- "time",
- "ufmt",
-]
-
-[[package]]
 name = "icu_collections"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -458,6 +437,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
 dependencies = [
  "either",
+]
+
+[[package]]
+name = "layer-physical"
+version = "0.1.0"
+dependencies = [
+ "avr-device",
+ "embedded-hal 1.0.0",
+ "encoding",
+ "listening_pin",
+ "morse",
+ "nb 1.1.0",
+ "nunny",
+ "process",
+ "ringbuf",
+ "time",
 ]
 
 [[package]]
@@ -1097,6 +1092,23 @@ name = "winnow"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0592e1c9d151f854e6fd382574c3a0855250e1d9b2f99d9281c6e6391af352f1"
+
+[[package]]
+name = "wiretap"
+version = "0.1.0"
+dependencies = [
+ "arduino-hal",
+ "avr-device",
+ "cargo-emit",
+ "encoding",
+ "interrupts",
+ "layer-physical",
+ "listening_pin",
+ "nb 1.1.0",
+ "panic-halt",
+ "process",
+ "time",
+]
 
 [[package]]
 name = "writeable"

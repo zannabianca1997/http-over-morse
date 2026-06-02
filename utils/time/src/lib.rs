@@ -17,8 +17,8 @@ pub type Time = usize;
 
 mod tc0;
 
-mod stopwatch;
-mod timer;
+pub mod stopwatch;
+pub mod timer;
 
 pub mod segments;
 
@@ -38,7 +38,7 @@ impl<TCb> Clock<TCb> {
         let (t, s) = tc0::init(timer, TIMER_COUNTS, PRESCALE);
 
         let (timer, timer_int) = timer::Timer::new(t, callback);
-        let (stopwatch, stopwatch_int) = stopwatch::Stopwatch::new(s);
+        let (stopwatch, stopwatch_int) = stopwatch::Stopwatch::new_with_initialized(s);
 
         (Self { timer, stopwatch }, (timer_int, stopwatch_int))
     }

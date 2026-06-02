@@ -1,0 +1,30 @@
+[package]
+name = "wiretap"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+bench = false
+name = "wiretap"
+test = false
+
+[dependencies]
+arduino-hal.workspace = true
+avr-device.workspace = true
+encoding.workspace = true
+interrupts.workspace = true
+layer-physical.workspace = true
+listening_pin.workspace = true
+nb.workspace = true
+panic-halt = "1.0.0"
+process.workspace = true
+time.workspace = true
+
+[build-dependencies]
+cargo-emit = "0.2.1"
+
+[features]
+default = ["discard"]
+base32 = []
+discard = []
+write = []

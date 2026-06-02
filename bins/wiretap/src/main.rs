@@ -1,21 +1,9 @@
-//! Direct to wire communication
-//!
-//! This binary will pipe the content of the serial port directly to the wire,
-//! and read back the wire content to the serial port.
-//!
-//! Configuration is possible during compilation with environment variables:
-//! - BAUDRATE: set the baudrate for the serial port
-//! - BASE32: consider the values on the wire as base32 encoded bytes
-//!
-//! # Caveat
-//! Even at the slowest possible baud rate of 250 the encoding is yet not fast
-//! enough to empty the serial buffer in time. Do not pipe things straight to
-//! this serial port
-
+#![doc = include_str!("../README.md")]
 #![no_std]
 #![no_main]
 #![feature(abi_avr_interrupt)]
 
+#[cfg(feature = "write")]
 use arduino_hal::port::{D13, Pin, mode::Output};
 use avr_device::interrupt;
 use panic_halt as _;
@@ -24,19 +12,20 @@ use encoding;
 use interrupts::{INT0, InterruptStorage, TIMER0_COMPA};
 use listening_pin::{self, ListeningPin};
 use process::{Process as _, pipe_to_writer::PipeToWriter};
-use time::{self, Clock, Stopwatch};
+#[cfg(feature = "write")]
+use time::Clock;
+use time::{self, Stopwatch};
 
-use http_over_morse::{
-    from_wire::{BytesFromWire, ListeningPinCallback},
-    to_wire::{BytesToWire, TimerCallback},
-};
+use layer_physical::from_wire::{BytesFromWire, ListeningPinCallback};
+#[cfg(feature = "write")]
+use layer_physical::to_wire::{BytesToWire, TimerCallback};
 
 type Strategy = cfg_select! {
-    base32 => encoding::Base32,
-    _ => encoding::Discard,
+    feature = "base32" => encoding::Base32,
+    feature = "discard" => encoding::Discard,
 };
 
-/// Baudrate of the serial. Set the `BAUDRATE` enviroment variable to control
+/// Baudrate of the serial. Set the `BAUDRATE` environment variable to control
 /// its value
 const BAUDRATE: u32 = const {
     if let Some(env) = option_env!("BAUDRATE") {
@@ -59,10 +48,12 @@ fn main() -> ! {
     let (serial_reader, serial_writer) = arduino_hal::default_serial!(dp, pins, BAUDRATE).split();
     let external_interrupts = dp.EXINT;
     let rx = pins.d2;
+    #[cfg(feature = "write")]
     let tx = pins.d13.into_output();
     let timer = dp.TC0;
 
     // Setup the clock
+    #[cfg(feature = "write")]
     let (
         Clock {
             timer,
@@ -73,6 +64,8 @@ fn main() -> ! {
         // Safety: we instantiate this only here
         TimerCallback::new(tx)
     });
+    #[cfg(not(feature = "write"))]
+    let (Stopwatch { reset, overflow }, clock_interrupts) = Stopwatch::new(timer);
 
     // Setup the pin to listen
     let (listening_pin, listening_pin_interrupts) =
@@ -85,7 +78,10 @@ fn main() -> ! {
     );
 
     // Serial to wire
+    #[cfg(feature = "write")]
     let mut serial_to_wire = BytesToWire::<_, Strategy, _>::new(serial_reader, timer);
+    #[cfg(not(feature = "write"))]
+    let _ = serial_reader;
 
     unsafe {
         // Safety: interrupts are off at the start
@@ -94,17 +90,23 @@ fn main() -> ! {
     };
 
     loop {
-        match serial_to_wire.poll() {
+        match wire_to_serial.poll() {
             Err(nb::Error::WouldBlock) => (),
         }
-        match wire_to_serial.poll() {
+        #[cfg(feature = "write")]
+        match serial_to_wire.poll() {
             Err(nb::Error::WouldBlock) => (),
         }
     }
 }
 
+#[cfg(feature = "write")]
+type ClockInterrupts = time::Interrupts<TimerCallback<Pin<Output, D13>>>;
+#[cfg(not(feature = "write"))]
+type ClockInterrupts = time::stopwatch::Interrupts;
+
 static INTERRUPTS: InterruptStorage<(
-    time::Interrupts<TimerCallback<Pin<Output, D13>>>,
+    ClockInterrupts,
     listening_pin::Interrupts<ListeningPinCallback>,
 )> = InterruptStorage::new();
 

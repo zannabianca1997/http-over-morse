@@ -1,68 +1,34 @@
-[package]
-name = "http-over-morse"
-version = "0.1.0"
-edition = "2024"
-license-file = "LICENSE"
-default-run = "wiretap"
-
 [workspace]
 resolver = "3"
 members = [
   ".",
-  "encoding",
-  "interrupts",
-  "listening_pin",
-  "morse",
-  "process",
-  "ringbuf",
-  "time"
+  "bins/*",
+  "layers/physical",
+  "layers/physical/encoding",
+  "layers/physical/morse",
+  "utils/*"
 ]
 
 [workspace.dependencies]
+encoding = { path = "layers/physical/encoding" }
+morse = { path = "layers/physical/morse" }
+
+interrupts = { path = "utils/interrupts" }
+layer-physical = { path = "layers/physical" }
+listening_pin = { path = "utils/listening_pin" }
+process = { path = "utils/process" }
+ringbuf = { path = "utils/ringbuf" }
+time = { path = "utils/time" }
+
 avr-device = { version = "0.8.1", features = ["atmega328p"] }
 embedded-hal = "1.0.0"
-encoding = { path = "encoding" }
-interrupts = { path = "interrupts" }
-listening_pin = { path = "listening_pin" }
-morse = { path = "morse" }
 nb = "1.1.0"
 nunny = { version = "0.2.2", default-features = false }
-process = { path = "process" }
-ringbuf = { path = "ringbuf" }
-time = { path = "time" }
 
 [workspace.dependencies.arduino-hal]
 git = "https://github.com/rahix/avr-hal"
 rev = "e5c8f37fe48419956e722490a82b9ca9b9fc61a2"
 features = ["arduino-nano"]
-
-[lib]
-bench = false
-test = false
-
-[[bin]]
-bench = false
-name = "wiretap"
-test = false
-
-[dependencies]
-arduino-hal.workspace = true
-avr-device.workspace = true
-embedded-hal.workspace = true
-encoding.workspace = true
-interrupts.workspace = true
-listening_pin.workspace = true
-morse.workspace = true
-nb.workspace = true
-nunny.workspace = true
-panic-halt = "1.0.0"
-process.workspace = true
-ringbuf.workspace = true
-time.workspace = true
-ufmt = "0.2.0"
-
-[build-dependencies]
-cargo-emit = "0.2.1"
 
 # Configure the build for minimal size - AVRs have very little program memory
 [profile.dev]
@@ -72,7 +38,7 @@ panic = "abort"
 
 [profile.release]
 opt-level = "s"
-debug = true
+debug = true  # Symbols are stripped by flashing anyway
 lto = true
 panic = "abort"
 codegen-units = 1

@@ -4,6 +4,7 @@
 
 use core::cell::Cell;
 
+use arduino_hal::pac::TC0;
 use avr_device::interrupt::{CriticalSection, Mutex, free};
 
 use super::{Time, tc0::InitializedForStopwatch};
@@ -14,8 +15,8 @@ pub struct Stopwatch {
 }
 
 impl Stopwatch {
-    /// Initialize the timer
-    pub(super) fn new(_tc0: InitializedForStopwatch) -> (Self, Interrupts) {
+    /// Initialize the stopwatch with an already initialized tc0
+    pub(super) fn new_with_initialized(_tc0: InitializedForStopwatch) -> (Self, Interrupts) {
         (
             Self {
                 reset: StopwatchReset { _priv: () },
@@ -23,6 +24,12 @@ impl Stopwatch {
             },
             Interrupts { _tc0 },
         )
+    }
+
+    /// Initialize the stopwatch
+    pub fn new(timer: TC0) -> (Self, Interrupts) {
+        let (_, _tc0) = super::tc0::init(timer, super::TIMER_COUNTS, super::PRESCALE);
+        Self::new_with_initialized(_tc0)
     }
 }
 

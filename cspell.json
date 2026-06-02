@@ -9,6 +9,9 @@
     "codegen",
     "hashers",
     "unsuffixed",
-    "ringbuf"
+    "ringbuf",
+    "EXINT",
+    "BAUDRATE",
+    "ravedude"
   ]
 }

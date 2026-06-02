@@ -1,0 +1,20 @@
+[package]
+name = "layer-physical"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+bench = false
+test = false
+
+[dependencies]
+avr-device.workspace = true
+embedded-hal.workspace = true
+encoding.workspace = true
+listening_pin.workspace = true
+morse.workspace = true
+nb.workspace = true
+nunny.workspace = true
+process.workspace = true
+ringbuf.workspace = true
+time.workspace = true
