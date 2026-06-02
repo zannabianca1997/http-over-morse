@@ -1,7 +1,8 @@
 //! Convert bytes into morse letters
 
+use either::Either;
 use encoding::{Error, Strategy, ToLetters};
-use morse::LetterOrSpace;
+use morse::{LetterOrProsignOrSpace, Prosign};
 use process::Process;
 
 /// Read morse letters from a byte source
@@ -21,10 +22,10 @@ impl<Inner, S: Strategy> BytesToLetters<Inner, S> {
 
 impl<Inner, S> Process for BytesToLetters<Inner, S>
 where
-    Inner: Process<Ok = u8>,
+    Inner: Process<Ok = Either<u8, Prosign>>,
     S: Strategy,
 {
-    type Ok = LetterOrSpace;
+    type Ok = LetterOrProsignOrSpace;
     type Err = Error<Inner::Err, <S::ToLetters as ToLetters>::Error>;
 
     fn poll(&mut self) -> nb::Result<Self::Ok, Self::Err> {

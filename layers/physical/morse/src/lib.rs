@@ -299,6 +299,12 @@ impl From<LetterOrProsign> for LetterOrProsignOrSpace {
     }
 }
 
+impl From<LetterOrSpace> for LetterOrProsignOrSpace {
+    fn from(value: LetterOrSpace) -> Self {
+        Self::new(value as u8).unwrap()
+    }
+}
+
 impl From<Prosign> for LetterOrProsignOrSpace {
     fn from(value: Prosign) -> Self {
         Self::new(value as u8).unwrap()

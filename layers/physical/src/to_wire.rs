@@ -2,7 +2,9 @@
 
 use core::convert::Infallible;
 
+use either::Either;
 use embedded_hal::digital::OutputPin;
+use morse::Prosign;
 use process::{NoItemProduced, Process};
 
 use time::Timer;
@@ -36,7 +38,7 @@ impl<Inner, Strategy: encoding::Strategy, Tx> BytesToWire<Inner, Strategy, Tx> {
 impl<Inner, Strategy, Tx> Process for BytesToWire<Inner, Strategy, Tx>
 where
     Strategy: encoding::Strategy,
-    Inner: Process<Ok = u8>,
+    Inner: Process<Ok = Either<u8, Prosign>>,
     Tx: OutputPin<Error = Infallible>,
 {
     type Ok = NoItemProduced;

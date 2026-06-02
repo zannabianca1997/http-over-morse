@@ -1,7 +1,8 @@
 //! Read bytes from a letter source
 
+use either::Either;
 use encoding::{Error, Strategy, ToBytes};
-use morse::LetterOrSpace;
+use morse::{LetterOrProsignOrSpace, Prosign};
 use process::Process;
 
 pub struct LettersToBytes<Inner, S: Strategy> {
@@ -20,10 +21,10 @@ impl<Inner, S: Strategy> LettersToBytes<Inner, S> {
 
 impl<Inner, S> Process for LettersToBytes<Inner, S>
 where
-    Inner: Process<Ok = LetterOrSpace>,
+    Inner: Process<Ok = LetterOrProsignOrSpace>,
     S: Strategy,
 {
-    type Ok = u8;
+    type Ok = Either<u8, Prosign>;
     type Err = Error<Inner::Err, <S::ToBytes as ToBytes>::Error>;
 
     fn poll(&mut self) -> nb::Result<Self::Ok, Self::Err> {

@@ -1,12 +1,13 @@
 //! Encode all bytes using base32
 //!
-//! Alphabet is: A-Z,0
+//! Alphabet is: A-Z,0-6
 
 use core::{convert::Infallible, hint::cold_path};
 
 use super::{Strategy, ToBytes, ToLetters, sealed};
 
-use morse::{Letter, LetterOrSpace, WordSpace};
+use either::{Either, Left, Right};
+use morse::{Letter, LetterOrProsign, LetterOrProsignOrSpace, Prosign, WordSpace};
 
 pub enum Base32 {}
 impl sealed::Sealed for Base32 {}
@@ -43,15 +44,15 @@ impl ToBytes for Decode {
 
     fn process<E>(
         &mut self,
-        mut feed: impl FnMut() -> nb::Result<LetterOrSpace, E>,
-    ) -> nb::Result<u8, super::Error<E, Self::Error>> {
+        mut feed: impl FnMut() -> nb::Result<LetterOrProsignOrSpace, E>,
+    ) -> nb::Result<Either<u8, Prosign>, super::Error<E, Self::Error>> {
         while self.len < 8 {
             // Pull in a new letter
 
-            let letter_or_space = feed().map_err(|err| err.map(super::Error::Inner))?;
+            let letter_or_space_or_prosign = feed().map_err(|err| err.map(super::Error::Inner))?;
 
-            match Letter::try_from(letter_or_space) {
-                Ok(letter) => {
+            match LetterOrProsign::try_from(letter_or_space_or_prosign).map(Letter::try_from) {
+                Ok(Ok(letter)) => {
                     let Some(u5) = Self::letter_to_u5(letter) else {
                         // TODO: handle errors what to do when we receive a letter
                         // that's not a b32 letter?
@@ -64,12 +65,9 @@ impl ToBytes for Decode {
                     self.bits |= (u5 as u16) << self.len;
                     self.len += 5;
                 }
-                Err(WordSpace::Space) => {
-                    // Space: flushing. len should be zero if the connection was good
-                    if self.len == 0 {
-                        // Good. trying to fetch a new letter to start the new stream
-                        continue;
-                    } else {
+                Ok(Err(prosign)) => {
+                    // Prosign: flushing. len should be zero if the connection was good
+                    if self.len != 0 {
                         // Ouch. Additional bits...
                         // TODO: handle errors. What to do when we received additional bytes?
 
@@ -78,6 +76,24 @@ impl ToBytes for Decode {
                         self.bits = 0;
                         self.len = 0;
                     }
+
+                    // Sending the prosign forward
+                    return Ok(Right(prosign));
+                }
+                Err(WordSpace::Space) => {
+                    // Space: flushing. len should be zero if the connection was good
+                    if self.len != 0 {
+                        // Ouch. Additional bits...
+                        // TODO: handle errors. What to do when we received additional bytes?
+
+                        cold_path();
+                        // Ignoring them for now
+                        self.bits = 0;
+                        self.len = 0;
+                    }
+
+                    // Trying to fetch a new letter to start the new stream
+                    continue;
                 }
             }
         }
@@ -86,14 +102,20 @@ impl ToBytes for Decode {
         self.bits >>= 8;
         self.len -= 8;
 
-        Ok(ch)
+        Ok(Left(ch))
     }
 }
 
 pub struct Encode {
     len: u8,
     bits: u16,
-    flushing: bool,
+    flushing: Flushing,
+}
+
+enum Flushing {
+    None,
+    Space,
+    Prosign(Prosign),
 }
 
 impl Encode {
@@ -121,31 +143,47 @@ impl ToLetters for Encode {
         Self {
             len: 0,
             bits: 0b0000_0000_0000_0000,
-            flushing: false,
+            flushing: Flushing::None,
         }
     }
 
     fn process<E>(
         &mut self,
-        mut feed: impl FnMut() -> nb::Result<u8, E>,
-    ) -> nb::Result<LetterOrSpace, super::Error<E, Self::Error>> {
-        if self.flushing {
-            self.flushing = false;
-            return Ok(LetterOrSpace::Space);
+        mut feed: impl FnMut() -> nb::Result<Either<u8, Prosign>, E>,
+    ) -> nb::Result<LetterOrProsignOrSpace, super::Error<E, Self::Error>> {
+        match self.flushing {
+            Flushing::Space => {
+                self.flushing = Flushing::None;
+                return Ok(LetterOrProsignOrSpace::Space);
+            }
+            Flushing::Prosign(prosign) => {
+                self.flushing = Flushing::None;
+                return Ok(prosign.into());
+            }
+            Flushing::None => (),
         }
 
         if self.len < 5 {
             // Pull in a new character
 
             match feed() {
-                Ok(ch) => {
+                Ok(Left(ch)) => {
                     // Push the new byte
                     self.bits |= (ch as u16) << self.len;
                     self.len += 8;
                 }
+                Ok(Right(prosign)) if self.len == 0 => {
+                    // No need to flush
+                    return Ok(prosign.into());
+                }
+                Ok(Right(prosign)) => {
+                    // Flushing for the prosign. Pad with 0 and add a space
+                    self.flushing = Flushing::Prosign(prosign);
+                    self.len = 5;
+                }
                 Err(nb::Error::WouldBlock) if self.len != 0 => {
                     // Take the occasion to flush. Pad with 0 and add a space
-                    self.flushing = true;
+                    self.flushing = Flushing::Space;
                     self.len = 5;
                 }
                 Err(err) => return Err(err.map(super::Error::Inner)),

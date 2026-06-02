@@ -2,8 +2,10 @@
 
 use core::convert::Infallible;
 
+use either::Either;
 use encoding::{Error, ToBytes};
 use listening_pin::ListeningPin;
+use morse::Prosign;
 use process::Process;
 use time::StopwatchOverflow;
 
@@ -37,7 +39,7 @@ impl<Strategy> Process for BytesFromWire<Strategy>
 where
     Strategy: encoding::Strategy,
 {
-    type Ok = u8;
+    type Ok = Either<u8, Prosign>;
     type Err = Error<Infallible, <Strategy::ToBytes as ToBytes>::Error>;
 
     fn poll(&mut self) -> nb::Result<Self::Ok, Self::Err> {

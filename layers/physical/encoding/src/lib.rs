@@ -2,7 +2,8 @@
 #![no_std]
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use morse::LetterOrSpace;
+use either::Either;
+use morse::{LetterOrProsignOrSpace, Prosign};
 
 pub use base32::Base32;
 pub use discard::Discard;
@@ -28,8 +29,8 @@ pub trait ToLetters {
     fn new() -> Self;
     fn process<E>(
         &mut self,
-        feed: impl FnMut() -> nb::Result<u8, E>,
-    ) -> nb::Result<LetterOrSpace, Error<E, Self::Error>>;
+        feed: impl FnMut() -> nb::Result<Either<u8, Prosign>, E>,
+    ) -> nb::Result<LetterOrProsignOrSpace, Error<E, Self::Error>>;
 }
 
 pub trait ToBytes {
@@ -37,8 +38,8 @@ pub trait ToBytes {
     fn new() -> Self;
     fn process<E>(
         &mut self,
-        feed: impl FnMut() -> nb::Result<LetterOrSpace, E>,
-    ) -> nb::Result<u8, Error<E, Self::Error>>;
+        feed: impl FnMut() -> nb::Result<LetterOrProsignOrSpace, E>,
+    ) -> nb::Result<Either<u8, Prosign>, Error<E, Self::Error>>;
 }
 
 pub enum Error<Inner, Strategy> {

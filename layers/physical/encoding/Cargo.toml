@@ -8,5 +8,6 @@ bench = false
 test = false
 
 [dependencies]
+either = { version = "1.16.0", default-features = false }
 morse.workspace = true
 nb.workspace = true

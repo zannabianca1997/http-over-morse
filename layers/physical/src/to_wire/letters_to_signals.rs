@@ -2,7 +2,7 @@
 
 use process::Process;
 
-use morse::{LETTER_SPACE, Letter, LetterOrProsignOrSpace, Signal, Symbol, WORD_SPACE, WordSpace};
+use morse::{LETTER_SPACE, LetterOrProsignOrSpace, Signal, Symbol, WORD_SPACE, WordSpace};
 
 pub struct LettersToSignals<Inner> {
     inner: Inner,
