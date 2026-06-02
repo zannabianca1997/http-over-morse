@@ -3,7 +3,7 @@
 /// Defined here to be shared with `build.rs`
 
 /// Symbol on the wire
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Symbol {
     /// A dot

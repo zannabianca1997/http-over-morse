@@ -10,66 +10,68 @@ use std::{
     range::Range,
 };
 
+use anyhow::{Context, Result};
 use itertools::Itertools;
 use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::primes::PRIMES;
+use build::primes::PRIMES;
+use src::{perfect_hash::*, symbol::*};
 
-const MORSE_DEFINITIONS: &str = "src/morse.txt";
+use crate::build::grammar::Grammar;
 
-#[path = "src/symbol.rs"]
-mod symbol;
-use symbol::*;
+mod src {
+    //! Things imported from the source, plus some implementations that would
+    //! not make sense in the avr world
 
-#[path = "src/perfect_hash.rs"]
-mod perfect_hash;
-use perfect_hash::*;
+    pub mod perfect_hash;
+    pub mod symbol;
 
-#[path = "build/primes.rs"]
-mod primes;
+    impl PartialOrd for symbol::Symbol {
+        fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+            Some(Self::cmp(self, other))
+        }
+    }
 
-fn main() {
-    cargo_emit::rerun_if_changed!(MORSE_DEFINITIONS);
+    impl Ord for symbol::Symbol {
+        fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+            u8::cmp(&(*self as u8), &(*other as u8))
+        }
+    }
 
-    let definitions = fs::read_to_string(MORSE_DEFINITIONS).expect("Cannot read definition file");
-    let definitions = definitions
-        .lines()
-        .flat_map(|line| {
-            let line = line.trim();
-            if line.is_empty() || line.starts_with('#') {
-                return None;
+    impl std::fmt::Debug for symbol::Symbol {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            match self {
+                Self::DOT => write!(f, "DOT"),
+                Self::LINE => write!(f, "LINE"),
             }
+        }
+    }
 
-            let Some((ch, def)) = line.split_once(' ') else {
-                panic!("All non-empty or comment lines should contain a space")
-            };
-            assert_eq!(1, ch.len(), "A single char should be before the space");
-            let ch = ch.as_bytes()[0];
-            if ch != ch.to_ascii_uppercase() {
-                cargo_emit::warning!(
-                    "Letters are automatically made uppercase, `{}` won't be matched",
-                    ch as char
-                )
-            }
+    impl std::fmt::Debug for perfect_hash::Hasher {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("Hasher")
+                .field("multiplier", &self.multiplier)
+                .field("modulus", &self.modulus)
+                .field("size", &self.size)
+                .finish()
+        }
+    }
+}
 
-            let symbols = def
-                .trim_start()
-                .chars()
-                .map(|ch| match ch {
-                    '.' => DOT,
-                    '-' => LINE,
-                    _ => panic!("`{ch}` is not a valid morse symbol"),
-                })
-                .collect::<Vec<_>>();
+mod build {
+    //! Bits and pieces of the build script, organized in a separate dir
 
-            Some((ch, symbols))
-        })
-        .unique_by(|(k, _)| *k);
+    pub mod grammar;
+    pub mod primes;
+}
 
-    let (symbols_slice, definitions) = build_symbols_slice(definitions);
+fn main() -> Result<()> {
+    let Grammar { letters } = Grammar::load()?;
+
+    let (symbols_slice, definitions) = build_symbols_slice(letters);
 
     let static_symbols_slice = static_symbols_slice(&symbols_slice);
     let is_morse_letter = is_morse_letter(&definitions);
@@ -80,14 +82,16 @@ fn main() {
         #decode
     };
 
-    let out = PathBuf::from(env::var("OUT_DIR").expect("Cargo should set OUT_DIR"))
+    let out = PathBuf::from(env::var("OUT_DIR").context("Cargo should set OUT_DIR")?)
         .join("morse.rs")
         .to_str()
-        .unwrap()
+        .context("Non unicode paths are unsupported")?
         .to_owned();
 
-    fs::write(&out, generated.to_string()).expect("Cannot write generated code");
-    cargo_emit::rustc_env!("MORSE_GENERATED_RS", "{}", out)
+    fs::write(&out, generated.to_string()).context("Cannot write generated code")?;
+    cargo_emit::rustc_env!("MORSE_GENERATED_RS", "{}", out);
+
+    Ok(())
 }
 
 /// Build a supersequence to use less memory
