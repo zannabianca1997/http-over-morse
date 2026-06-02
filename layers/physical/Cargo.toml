@@ -9,7 +9,7 @@ test = false
 
 [dependencies]
 avr-device.workspace = true
-either = { version = "1.16.0", default-features = false }
+either.workspace = true
 embedded-hal.workspace = true
 encoding.workspace = true
 listening_pin.workspace = true

@@ -21,6 +21,7 @@ ringbuf = { path = "utils/ringbuf" }
 time = { path = "utils/time" }
 
 avr-device = { version = "0.8.1", features = ["atmega328p"] }
+either = { version = "1.16.0", default-features = false }
 embedded-hal = "1.0.0"
 nb = "1.1.0"
 nunny = { version = "0.2.2", default-features = false }

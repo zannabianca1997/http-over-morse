@@ -1,8 +1,8 @@
 [general]
 board = "nano-new"
-# After flashing, open the serial console at 57600 baud.
-open-console = true
 
+# After flashing, open the serial console at 9600 baud.
+open-console = true
 serial-baudrate = 9600
 
 port = "/dev/ttyUSB0"

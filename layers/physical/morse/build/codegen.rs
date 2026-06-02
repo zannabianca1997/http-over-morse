@@ -43,7 +43,11 @@ pub fn enums(letters: &Letters, prosigns: &BTreeMap<String, Prosign>) -> TokenSt
         .into_iter()
         .map(|(ch, symbols)| {
             let ch = ch.get();
-            let name = format_ident!("Letter{}", ch as char);
+            let name = match ch as char {
+                ch @ ('A'..='Z' | 'a'..='z') => format_ident!("{ch}"),
+                ch @ ('0'..='9') => format_ident!("_{ch}"),
+                _ => format_ident!("_x{ch:x}"),
+            };
             let doc = format!(
                 "Letter {} ({})",
                 ch as char,
@@ -85,6 +89,14 @@ pub fn enums(letters: &Letters, prosigns: &BTreeMap<String, Prosign>) -> TokenSt
         .values()
         .map(|Prosign { maps_to, .. }| maps_to.get())
         .collect_vec();
+
+    let prosign_codes_arms = prosigns.iter().map(|(name, Prosign { code, .. })| {
+        let name = format_ident!("{}", &stringcase::pascal_case(name));
+        let code = Literal::byte_string(code.as_bytes());
+        quote! {
+            Self :: #name => nunny::Slice::new(#code).unwrap()
+        }
+    });
 
     let space_variants = once(quote! {
         // Space
@@ -135,6 +147,12 @@ pub fn enums(letters: &Letters, prosigns: &BTreeMap<String, Prosign>) -> TokenSt
                 match value {
                     #( #prosign_values ) | * => Some(unsafe { core::mem::transmute(value) }),
                     _ => None
+                }
+            }
+
+            pub const fn code(&self) -> &'static nunny::Slice<u8> {
+                match *self {
+                    #( #prosign_codes_arms ),*
                 }
             }
         }

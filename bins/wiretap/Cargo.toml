@@ -9,16 +9,19 @@ name = "wiretap"
 test = false
 
 [dependencies]
-arduino-hal.workspace = true
-avr-device.workspace = true
 encoding.workspace = true
 interrupts.workspace = true
 layer-physical.workspace = true
 listening_pin.workspace = true
-nb.workspace = true
-panic-halt = "1.0.0"
+morse.workspace = true
 process.workspace = true
 time.workspace = true
+
+arduino-hal.workspace = true
+avr-device.workspace = true
+either.workspace = true
+nb.workspace = true
+panic-halt = "1.0.0"
 
 [build-dependencies]
 cargo-emit = "0.2.1"

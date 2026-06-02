@@ -20,10 +20,17 @@ use layer_physical::from_wire::{BytesFromWire, ListeningPinCallback};
 #[cfg(feature = "write")]
 use layer_physical::to_wire::{BytesToWire, TimerCallback};
 
+use crate::print_prosigns::PrintProsigns;
+#[cfg(feature = "write")]
+use crate::without_prosigns::WithoutProsigns;
+
 type Strategy = cfg_select! {
     feature = "base32" => encoding::Base32,
     feature = "discard" => encoding::Discard,
 };
+
+mod print_prosigns;
+mod without_prosigns;
 
 /// Baudrate of the serial. Set the `BAUDRATE` environment variable to control
 /// its value
@@ -74,12 +81,13 @@ fn main() -> ! {
     // Wire to serial
     let mut wire_to_serial = PipeToWriter::new(
         serial_writer,
-        BytesFromWire::<Strategy>::new(listening_pin, overflow),
+        PrintProsigns::new(BytesFromWire::<Strategy>::new(listening_pin, overflow)),
     );
 
     // Serial to wire
     #[cfg(feature = "write")]
-    let mut serial_to_wire = BytesToWire::<_, Strategy, _>::new(serial_reader, timer);
+    let mut serial_to_wire =
+        BytesToWire::<_, Strategy, _>::new(WithoutProsigns::new(serial_reader), timer);
     #[cfg(not(feature = "write"))]
     let _ = serial_reader;
 
