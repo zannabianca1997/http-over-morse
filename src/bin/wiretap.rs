@@ -20,6 +20,7 @@ use arduino_hal::port::{D13, Pin, mode::Output};
 use avr_device::interrupt;
 use panic_halt as _;
 
+use encoding;
 use interrupts::{INT0, InterruptStorage, TIMER0_COMPA};
 use listening_pin::{self, ListeningPin};
 use process::{Process as _, pipe_to_writer::PipeToWriter};
@@ -27,13 +28,12 @@ use time::{self, Clock, Stopwatch};
 
 use http_over_morse::{
     from_wire::{BytesFromWire, ListeningPinCallback},
-    strategies,
     to_wire::{BytesToWire, TimerCallback},
 };
 
 type Strategy = cfg_select! {
-    base32 => strategies::Base32,
-    _ => strategies::Discard,
+    base32 => encoding::Base32,
+    _ => encoding::Discard,
 };
 
 /// Baudrate of the serial. Set the `BAUDRATE` enviroment variable to control

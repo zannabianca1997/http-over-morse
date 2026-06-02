@@ -5,7 +5,7 @@
 use embedded_hal::digital::PinState;
 use process::Process;
 
-use encoding::{
+use morse::{
     self, DOT, DOT_LENGTH, LETTER_SPACE, LETTER_SPACE_LENGTH, LINE, LINE_LENGTH,
     SYMBOL_SPACE_LENGTH,
     Signal::{self, Space, Symbol},
@@ -22,7 +22,7 @@ pub struct SignalsToSegments<Inner> {
 enum State {
     Idle,
     LastEmittedWasSymbol,
-    SymbolPushBack(encoding::Symbol),
+    SymbolPushBack(morse::Symbol),
 }
 
 impl<Inner> SignalsToSegments<Inner> {

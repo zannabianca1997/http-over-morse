@@ -1,13 +1,23 @@
-# Encoding
+# Encoding bytes to morse letters
 
-Crate containing the morse encoding data
+This crate contains strategies to encode binaries to morse letters.
 
-## LUT generation 
+## Strategies available
 
-Most of the decoding is made using lookup tables, based on a precalculated
-perfect hash. I did not bother optimizing neither the hash function not the
-search, so finding the values takes ~ 40min.
+### Discard 
 
-To avoid spending that at each compilation, the values are cached inside
-`.phcache`. To check them, set the `CALC_HASHER` env var and look at your cores
-go :3
+The easiest strategy: map ascii bytes that have a corresponding morse letter in
+that letter and viceversa. Discard all in both way that has not a direct
+translation.
+
+To make is more useful this will also translate all ascii spaces into simple
+word spaces and uppercase all ascii letters.
+
+### Base32
+
+Morse code contains the alphabet for
+[base32](https://en.wikipedia.org/wiki/Base32). This strategy employs it to
+encode arbitrary octets in the stream. 
+
+Space are inserted when the underlying octet stream would block, and are read on
+the decoding side as a signal to flush the buffer.

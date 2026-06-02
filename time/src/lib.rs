@@ -10,6 +10,9 @@ pub use stopwatch::{Stopwatch, StopwatchOverflow, StopwatchReset};
 pub use timer::{Timer, TimerCallback};
 
 /// Type for time calculations
+// TODO: pretty sure we can get away with a u8, and that would speed up
+// calculations quite some. But we need to check every point for assumptions on
+// the size of this type
 pub type Time = usize;
 
 mod tc0;

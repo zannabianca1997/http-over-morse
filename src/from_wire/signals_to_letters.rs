@@ -4,7 +4,7 @@ use core::hint::cold_path;
 
 use process::Process;
 
-use encoding::{Decoder, LetterOrSpace, Signal, WORD_SPACE};
+use morse::{Decoder, LetterOrSpace, Signal, WORD_SPACE};
 
 pub struct SignalsToLetters<Inner> {
     inner: Inner,

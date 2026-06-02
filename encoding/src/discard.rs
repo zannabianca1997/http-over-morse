@@ -6,7 +6,7 @@ use core::convert::Infallible;
 
 use super::{Strategy, ToBytes, ToLetters, sealed};
 
-use encoding::LetterOrSpace;
+use morse::LetterOrSpace;
 
 /// Discard all bytes that are not encodable
 ///

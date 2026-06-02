@@ -13,18 +13,18 @@ use segments_to_wire::SegmentsToWire;
 pub use segments_to_wire::TimerCallback;
 use signals_to_segments::SignalsToSegments;
 
-use crate::strategies::{Error, ToLetters};
+use encoding::{Error, ToLetters};
 
 pub mod bytes_to_letters;
 pub mod letters_to_signals;
 pub mod segments_to_wire;
 pub mod signals_to_segments;
 
-pub struct BytesToWire<Inner, Strategy: crate::strategies::Strategy, Tx>(
+pub struct BytesToWire<Inner, Strategy: encoding::Strategy, Tx>(
     SegmentsToWire<SignalsToSegments<LettersToSignals<BytesToLetters<Inner, Strategy>>>, Tx>,
 );
 
-impl<Inner, Strategy: crate::strategies::Strategy, Tx> BytesToWire<Inner, Strategy, Tx> {
+impl<Inner, Strategy: encoding::Strategy, Tx> BytesToWire<Inner, Strategy, Tx> {
     pub fn new(inner: Inner, timer: Timer<TimerCallback<Tx>>) -> Self {
         Self(SegmentsToWire::new(
             timer,
@@ -35,7 +35,7 @@ impl<Inner, Strategy: crate::strategies::Strategy, Tx> BytesToWire<Inner, Strate
 
 impl<Inner, Strategy, Tx> Process for BytesToWire<Inner, Strategy, Tx>
 where
-    Strategy: crate::strategies::Strategy,
+    Strategy: encoding::Strategy,
     Inner: Process<Ok = u8>,
     Tx: OutputPin<Error = Infallible>,
 {

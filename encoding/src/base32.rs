@@ -6,7 +6,7 @@ use core::{convert::Infallible, hint::cold_path};
 
 use super::{Strategy, ToBytes, ToLetters, sealed};
 
-use encoding::{Letter, LetterOrSpace};
+use morse::{Letter, LetterOrSpace};
 
 pub enum Base32 {}
 impl sealed::Sealed for Base32 {}

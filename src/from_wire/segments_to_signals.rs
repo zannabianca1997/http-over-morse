@@ -7,7 +7,7 @@ use core::num::NonZero;
 use embedded_hal::digital::PinState;
 use process::Process;
 
-use encoding::{
+use morse::{
     DOT_LENGTH, LETTER_SPACE, LETTER_SPACE_LENGTH, LINE_LENGTH, SYMBOL_SPACE_LENGTH,
     Signal::{self, Space, Symbol},
     Symbol::{DOT, LINE},

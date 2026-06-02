@@ -2,6 +2,7 @@
 
 use core::convert::Infallible;
 
+use encoding::{Error, ToBytes};
 use listening_pin::ListeningPin;
 use process::Process;
 use time::StopwatchOverflow;
@@ -12,18 +13,16 @@ use signals_to_letters::SignalsToLetters;
 pub use wire_to_segments::ListeningPinCallback;
 use wire_to_segments::WireToSegments;
 
-use crate::strategies::{Error, ToBytes};
-
 pub mod letters_to_bytes;
 pub mod segments_to_signals;
 pub mod signals_to_letters;
 pub mod wire_to_segments;
 
-pub struct BytesFromWire<Strategy: crate::strategies::Strategy>(
+pub struct BytesFromWire<Strategy: encoding::Strategy>(
     LettersToBytes<SignalsToLetters<SegmentsToSignals<WireToSegments>>, Strategy>,
 );
 
-impl<Strategy: crate::strategies::Strategy> BytesFromWire<Strategy> {
+impl<Strategy: encoding::Strategy> BytesFromWire<Strategy> {
     pub fn new(
         listening_pin: ListeningPin<ListeningPinCallback>,
         overflow: StopwatchOverflow,
@@ -36,7 +35,7 @@ impl<Strategy: crate::strategies::Strategy> BytesFromWire<Strategy> {
 
 impl<Strategy> Process for BytesFromWire<Strategy>
 where
-    Strategy: crate::strategies::Strategy,
+    Strategy: encoding::Strategy,
 {
     type Ok = u8;
     type Err = Error<Infallible, <Strategy::ToBytes as ToBytes>::Error>;
