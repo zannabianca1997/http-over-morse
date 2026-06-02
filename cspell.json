@@ -12,6 +12,7 @@
     "ringbuf",
     "EXINT",
     "BAUDRATE",
-    "ravedude"
+    "ravedude",
+    "PHCACHE"
   ]
 }

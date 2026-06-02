@@ -2,6 +2,12 @@
 
 Crate containing the morse encoding data
 
+## Grammar
+
+The morse code grammar is inside `Grammar.toml`. Most of the code is generated
+by the build script from that file. The library then wraps that code in a safe
+and nicer API.
+
 ## LUT generation 
 
 Most of the decoding is made using lookup tables, based on a precalculated

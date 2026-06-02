@@ -6,17 +6,17 @@ use serde::Deserialize;
 
 use crate::src::symbol::Symbol;
 
-const GRAMMAR_FILE: &str = "Grammar.toml";
-
 #[derive(Debug, Deserialize)]
 pub struct Grammar {
     pub letters: Letters,
 }
 
 impl Grammar {
+    const PATH: &str = "Grammar.toml";
+
     pub fn load() -> Result<Self> {
-        cargo_emit::rerun_if_changed!(GRAMMAR_FILE);
-        let file_content = fs::read(GRAMMAR_FILE).context("Cannot read grammar file")?;
+        cargo_emit::rerun_if_changed!(Self::PATH);
+        let file_content = fs::read(Self::PATH).context("Cannot read grammar file")?;
         toml::from_slice(&file_content).context("Invalid grammar file")
     }
 }
