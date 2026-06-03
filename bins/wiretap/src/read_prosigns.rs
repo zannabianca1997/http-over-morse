@@ -1,5 +1,7 @@
 #![cfg(feature = "write")]
 
+use core::mem::MaybeUninit;
+
 use either::{
     Either::{self, Right},
     Left,
@@ -19,7 +21,7 @@ enum State {
     Idle,
     ReadingProsign {
         len: u8,
-        read: [u8; MAX_PROSIGN_LEN],
+        read: [MaybeUninit<u8>; MAX_PROSIGN_LEN],
     },
 }
 
@@ -45,7 +47,7 @@ where
                 (State::Idle, ESCAPE) => {
                     self.state = State::ReadingProsign {
                         len: 0,
-                        read: [0; MAX_PROSIGN_LEN],
+                        read: [MaybeUninit::uninit(); MAX_PROSIGN_LEN],
                     }
                 }
                 (State::Idle, ch) => {
@@ -60,14 +62,14 @@ where
                     if let Some(prosign) = Prosign::from_code(unsafe {
                         // Safety: len cannot get over MAX_PROSIGN_LEN
                         // without triggering the last arm
-                        read.get_unchecked(..*len as usize)
+                        read.get_unchecked(..*len as usize).assume_init_ref()
                     }) =>
                 {
                     self.state = State::Idle;
                     return Ok(Right(prosign));
                 }
                 (State::ReadingProsign { len, read }, ch) if *len < MAX_PROSIGN_LEN as u8 => {
-                    read[*len as usize] = ch.to_ascii_uppercase();
+                    read[*len as usize].write(ch.to_ascii_uppercase());
                     *len += 1;
                 }
                 // Prosign too long or unknown
