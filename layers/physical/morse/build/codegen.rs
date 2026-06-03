@@ -97,10 +97,17 @@ pub fn enums(letters: &Letters, prosigns: &BTreeMap<String, Prosign>) -> TokenSt
             Self :: #name => nunny::Slice::new(#code).unwrap()
         }
     });
+    let codes_prosign_arms = prosigns.iter().map(|(name, Prosign { code, .. })| {
+        let name = format_ident!("{}", &stringcase::pascal_case(name));
+        let code = Literal::byte_string(code.as_bytes());
+        quote! {
+            #code => Some ( Self :: #name )
+        }
+    });
 
     let space_variants = once(quote! {
-        // Space
-        Space = b' '
+        /// Word space
+        WordSpace = b' '
     })
     .collect_vec();
     let space_values = vec![b' '];
@@ -153,6 +160,13 @@ pub fn enums(letters: &Letters, prosigns: &BTreeMap<String, Prosign>) -> TokenSt
             pub const fn code(&self) -> &'static nunny::Slice<u8> {
                 match *self {
                     #( #prosign_codes_arms ),*
+                }
+            }
+
+            pub const fn from_code(code: &[u8]) -> Option<Self> {
+                match code {
+                    #( #codes_prosign_arms ),* ,
+                    _ => None
                 }
             }
         }

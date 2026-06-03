@@ -49,7 +49,7 @@ where
                     return Ok(Signal::Symbol(*next));
                 }
             }
-            Ok(WordSpace::Space) => {
+            Ok(WordSpace::WordSpace) => {
                 self.last_emitted_was_symbol = false;
                 Ok(Signal::Space(WORD_SPACE))
             }

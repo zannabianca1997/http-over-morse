@@ -33,7 +33,7 @@ where
         loop {
             if self.space_pushback {
                 self.space_pushback = false;
-                return Ok(LetterOrProsignOrSpace::Space);
+                return Ok(LetterOrProsignOrSpace::WordSpace);
             }
 
             let signal = self.inner.poll()?;

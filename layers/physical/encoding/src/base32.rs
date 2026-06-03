@@ -80,7 +80,7 @@ impl ToBytes for Decode {
                     // Sending the prosign forward
                     return Ok(Right(prosign));
                 }
-                Err(WordSpace::Space) => {
+                Err(WordSpace::WordSpace) => {
                     // Space: flushing. len should be zero if the connection was good
                     if self.len != 0 {
                         // Ouch. Additional bits...
@@ -154,7 +154,7 @@ impl ToLetters for Encode {
         match self.flushing {
             Flushing::Space => {
                 self.flushing = Flushing::None;
-                return Ok(LetterOrProsignOrSpace::Space);
+                return Ok(LetterOrProsignOrSpace::WordSpace);
             }
             Flushing::Prosign(prosign) => {
                 self.flushing = Flushing::None;
