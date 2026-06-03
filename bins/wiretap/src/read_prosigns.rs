@@ -51,6 +51,11 @@ where
                 (State::Idle, ch) => {
                     return Ok(Left(ch));
                 }
+                // Double escape to escape
+                (State::ReadingProsign { len: 0, .. }, ESCAPE) => {
+                    self.state = State::Idle;
+                    return Ok(Left(ESCAPE));
+                }
                 (State::ReadingProsign { len, read }, b']')
                     if let Some(prosign) = Prosign::from_code(unsafe {
                         // Safety: len cannot get over MAX_PROSIGN_LEN
