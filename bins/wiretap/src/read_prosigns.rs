@@ -47,12 +47,10 @@ where
                 (State::Idle, ESCAPE) => {
                     self.state = State::ReadingProsign {
                         len: 0,
-                        read: [MaybeUninit::uninit(); MAX_PROSIGN_LEN],
+                        read: [MaybeUninit::uninit(); _],
                     }
                 }
-                (State::Idle, ch) => {
-                    return Ok(Left(ch));
-                }
+                (State::Idle, ch) => return Ok(Left(ch)),
                 // Double escape to escape
                 (State::ReadingProsign { len: 0, .. }, ESCAPE) => {
                     self.state = State::Idle;
