@@ -1,5 +1,7 @@
 use bytemuck::{NoUninit, Zeroable};
 
+use crate::address::NetAddress;
+
 /// Broadcast address
 #[derive(Clone, Copy, PartialEq, Eq, Zeroable, NoUninit, Default)]
 #[repr(transparent)]
@@ -18,3 +20,10 @@ impl BroadcastAddress {
         Self(Zero::Zero)
     }
 }
+
+const _: () = const {
+    let align = align_of::<BroadcastAddress>();
+    assert!(align == 1)
+};
+impl crate::address::sealed::Sealed for BroadcastAddress {}
+unsafe impl NetAddress for BroadcastAddress {}

@@ -4,6 +4,8 @@
 
 use bytemuck::NoUninit;
 
+use crate::address::NetAddress;
+
 /// This device address
 ///
 /// Value is configured via the "ADDRESS" env var at compilation time
@@ -37,3 +39,10 @@ impl ThisDeviceAddress {
 }
 
 const _: () = const { assert!(ThisAddr::Value as u8 != 0) };
+
+const _: () = const {
+    let align = align_of::<ThisDeviceAddress>();
+    assert!(align == 1)
+};
+impl crate::address::sealed::Sealed for ThisDeviceAddress {}
+unsafe impl NetAddress for ThisDeviceAddress {}

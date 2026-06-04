@@ -3,6 +3,7 @@ resolver = "3"
 members = [
   ".",
   "bins/*",
+  "layers/datalink/frames",
   "layers/physical",
   "layers/physical/encoding",
   "layers/physical/morse",
@@ -11,8 +12,10 @@ members = [
 
 [workspace.dependencies]
 encoding = { path = "layers/physical/encoding" }
-layer-physical = { path = "layers/physical" }
 morse = { path = "layers/physical/morse" }
+layer-physical = { path = "layers/physical" }
+
+frames = { path = "layers/datalink/frames" }
 
 interrupts = { path = "utils/interrupts" }
 listening_pin = { path = "utils/listening_pin" }

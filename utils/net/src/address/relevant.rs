@@ -1,6 +1,6 @@
 use bytemuck::{NoUninit, must_cast};
 
-use crate::address::{BroadcastAddress, ThisDeviceAddress};
+use crate::address::{BroadcastAddress, NetAddress, NetAddressSuperSet, ThisDeviceAddress};
 
 use super::{broadcast::Zero, device::this::ThisAddr};
 
@@ -67,3 +67,20 @@ const _: () = const {
     let [b]: [u8; 1] = must_cast(ThisDeviceAddress::new());
     assert!(a == b)
 };
+
+const _: () = const {
+    let align = align_of::<RelevantAddr>();
+    assert!(align == 1)
+};
+impl crate::address::sealed::Sealed for RelevantAddress {}
+unsafe impl NetAddress for RelevantAddress {}
+unsafe impl NetAddressSuperSet<ThisDeviceAddress> for RelevantAddress {
+    fn is(&self) -> bool {
+        self.0 == RelevantAddr::This
+    }
+}
+unsafe impl NetAddressSuperSet<BroadcastAddress> for RelevantAddress {
+    fn is(&self) -> bool {
+        self.0 == RelevantAddr::Broadcast
+    }
+}

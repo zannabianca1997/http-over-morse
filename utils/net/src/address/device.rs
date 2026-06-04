@@ -6,6 +6,8 @@ use bytemuck::{NoUninit, PodInOption, ZeroableInOption, must_cast};
 
 use this::ThisDeviceAddress;
 
+use crate::address::{NetAddress, NetAddressSuperSet};
+
 pub mod this;
 
 /// Address of a device
@@ -23,19 +25,6 @@ impl DeviceAddress {
     pub const fn this_device() -> Self {
         Self(NonZero::new(this::ThisAddr::Value as u8).unwrap())
     }
-
-    /// As this device address, if it represent that
-    pub const fn as_this_device(&self) -> Option<&this::ThisDeviceAddress> {
-        if self.0.get() == this::ThisAddr::Value as u8 {
-            let ptr = self as *const Self as *const ThisDeviceAddress;
-            Some(unsafe {
-                // Safety: `#[repr(transparent)]` + we checked the content
-                &*ptr
-            })
-        } else {
-            None
-        }
-    }
 }
 
 const _: () = const {
@@ -43,3 +32,15 @@ const _: () = const {
     let [b]: [u8; 1] = must_cast(this::ThisDeviceAddress::new());
     assert!(a == b)
 };
+
+const _: () = const {
+    let align = align_of::<DeviceAddress>();
+    assert!(align == 1)
+};
+impl crate::address::sealed::Sealed for DeviceAddress {}
+unsafe impl NetAddress for DeviceAddress {}
+unsafe impl NetAddressSuperSet<ThisDeviceAddress> for DeviceAddress {
+    fn is(&self) -> bool {
+        self.0.get() == this::ThisAddr::Value as u8
+    }
+}
