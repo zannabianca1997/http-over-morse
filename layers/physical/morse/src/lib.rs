@@ -1,6 +1,5 @@
 #![doc = include_str!("../README.md")]
 #![no_std]
-#![deny(unsafe_op_in_unsafe_fn)]
 // Needed to slice the static storage in a const way
 #![feature(const_trait_impl)]
 #![feature(const_index)]

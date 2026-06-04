@@ -16,6 +16,10 @@
     "PHCACHE",
     "prosigns",
     "prosign",
-    "stringcase"
+    "stringcase",
+    "Zeroable",
+    "Dataframe",
+    "Polonius",
+    "pushback"
   ]
 }

@@ -10,10 +10,16 @@ members = [
   "utils/*"
 ]
 
+[workspace.package]
+edition = "2024"
+license = "MIT"
+license-file = "LICENSE"
+
 [workspace.dependencies]
+layer-physical = { path = "layers/physical" }
+
 encoding = { path = "layers/physical/encoding" }
 morse = { path = "layers/physical/morse" }
-layer-physical = { path = "layers/physical" }
 
 frames = { path = "layers/datalink/frames" }
 
@@ -38,7 +44,8 @@ git = "https://github.com/rahix/avr-hal"
 rev = "e5c8f37fe48419956e722490a82b9ca9b9fc61a2"
 features = ["arduino-nano"]
 
-[workspace.lints]
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"  # I find it clearer
 
 # Configure the build for minimal size - AVRs have very little program memory
 [profile.dev]

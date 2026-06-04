@@ -1,7 +1,7 @@
 [package]
 name = "encoding"
 version = "0.1.0"
-edition = "2024"
+edition.workspace = true
 
 [lib]
 bench = false
@@ -11,3 +11,6 @@ test = false
 either.workspace = true
 morse.workspace = true
 nb.workspace = true
+
+[lints]
+workspace = true

@@ -1,6 +1,5 @@
 #![doc = include_str!("../README.md")]
 #![no_std]
-#![deny(unsafe_op_in_unsafe_fn)]
 
 use either::Either;
 use morse::{LetterOrProsignOrSpace, Prosign};
