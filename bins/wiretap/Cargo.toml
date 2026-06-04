@@ -24,7 +24,7 @@ nb.workspace = true
 panic-halt = "1.0.0"
 
 [build-dependencies]
-cargo-emit = "0.2.1"
+cargo-emit.workspace = true
 
 [features]
 default = ["discard"]

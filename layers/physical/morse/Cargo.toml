@@ -13,7 +13,7 @@ time.workspace = true
 
 [build-dependencies]
 anyhow = "1.0.102"
-cargo-emit = "0.2.1"
+cargo-emit.workspace = true
 itertools = "0.14.0"
 proc-macro2 = "1.0.106"
 quote = "1.0.45"
