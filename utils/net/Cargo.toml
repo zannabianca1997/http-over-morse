@@ -1,0 +1,18 @@
+[package]
+name = "net"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+bench = false
+test = false
+
+[dependencies]
+bytemuck.workspace = true
+const-random = "0.1.18"
+
+[build-dependencies]
+cargo-emit.workspace = true
+
+[lints]
+workspace = true
