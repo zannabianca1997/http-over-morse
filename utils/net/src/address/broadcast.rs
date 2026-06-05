@@ -1,13 +1,15 @@
-use bytemuck::{NoUninit, Zeroable};
-
-use crate::address::NetAddress;
+use zerocopy::{FromZeros, Immutable, IntoBytes, KnownLayout, Unaligned};
 
 /// Broadcast address
-#[derive(Clone, Copy, PartialEq, Eq, Zeroable, NoUninit, Default)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, FromZeros, Immutable, IntoBytes, KnownLayout, Default, Unaligned,
+)]
 #[repr(transparent)]
 pub struct BroadcastAddress(Zero);
 
-#[derive(Clone, Copy, PartialEq, Eq, Zeroable, NoUninit, Default)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, FromZeros, Immutable, IntoBytes, KnownLayout, Default, Unaligned,
+)]
 #[repr(u8)]
 pub(super) enum Zero {
     #[default]
@@ -20,10 +22,3 @@ impl BroadcastAddress {
         Self(Zero::Zero)
     }
 }
-
-const _: () = const {
-    let align = align_of::<BroadcastAddress>();
-    assert!(align == 1)
-};
-impl crate::address::sealed::Sealed for BroadcastAddress {}
-unsafe impl NetAddress for BroadcastAddress {}

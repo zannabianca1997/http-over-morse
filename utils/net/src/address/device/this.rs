@@ -2,18 +2,20 @@
 //!
 //! Address is set at compilation time via the "ADDRESS" env var
 
-use bytemuck::NoUninit;
-
-use crate::address::NetAddress;
+use zerocopy::{Immutable, IntoBytes, KnownLayout, TryFromBytes, Unaligned};
 
 /// This device address
 ///
 /// Value is configured via the "ADDRESS" env var at compilation time
-#[derive(Clone, Copy, PartialEq, Eq, NoUninit, Default)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, IntoBytes, Default, KnownLayout, Immutable, TryFromBytes, Unaligned,
+)]
 #[repr(transparent)]
 pub struct ThisDeviceAddress(ThisAddr);
 
-#[derive(Clone, Copy, PartialEq, Eq, NoUninit, Default)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, IntoBytes, Default, KnownLayout, Immutable, TryFromBytes, Unaligned,
+)]
 #[repr(u8)]
 pub(in crate::address) enum ThisAddr {
     #[default]
@@ -25,7 +27,7 @@ pub(in crate::address) enum ThisAddr {
                 Err(_) => panic!("Invalid address"),
             }
         } else {
-            // Mainly needed for typechecking
+            // Mainly needed for typechecking, cargo build prints a warning
             1
         }
     },
@@ -37,12 +39,3 @@ impl ThisDeviceAddress {
         Self(ThisAddr::Value)
     }
 }
-
-const _: () = const { assert!(ThisAddr::Value as u8 != 0) };
-
-const _: () = const {
-    let align = align_of::<ThisDeviceAddress>();
-    assert!(align == 1)
-};
-impl crate::address::sealed::Sealed for ThisDeviceAddress {}
-unsafe impl NetAddress for ThisDeviceAddress {}

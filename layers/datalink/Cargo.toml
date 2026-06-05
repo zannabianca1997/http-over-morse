@@ -1,0 +1,22 @@
+[package]
+name = "datalink"
+version = "0.1.0"
+edition.workspace = true
+
+[lib]
+bench = false
+test = false
+
+[dependencies]
+frames.workspace = true
+morse.workspace = true
+net.workspace = true
+parity.workspace = true
+process.workspace = true
+
+either.workspace = true
+nb.workspace = true
+zerocopy.workspace = true
+
+[lints]
+workspace = true

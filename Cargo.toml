@@ -3,6 +3,7 @@ resolver = "3"
 members = [
   ".",
   "bins/*",
+  "layers/datalink",
   "layers/datalink/frames",
   "layers/physical",
   "layers/physical/encoding",
@@ -21,21 +22,24 @@ layer-physical = { path = "layers/physical" }
 encoding = { path = "layers/physical/encoding" }
 morse = { path = "layers/physical/morse" }
 
+layer-datalink = { path = "layers/datalink" }
+
 frames = { path = "layers/datalink/frames" }
 
 interrupts = { path = "utils/interrupts" }
 listening_pin = { path = "utils/listening_pin" }
 net = { path = "utils/net" }
+parity = { path = "utils/parity" }
 process = { path = "utils/process" }
 ringbuf = { path = "utils/ringbuf" }
 time = { path = "utils/time" }
 
 avr-device = { version = "0.8.1", features = ["atmega328p"] }
-bytemuck = { version = "1.25.0", features = ["latest_stable_rust"] }
 either = { version = "1.16.0", default-features = false }
 embedded-hal = "1.0.0"
 nb = "1.1.0"
 nunny = { version = "0.2.2", default-features = false }
+zerocopy = { version = "0.8.50", features = ["derive"] }
 
 cargo-emit = "0.2.1"
 
