@@ -1,0 +1,15 @@
+[package]
+name = "codegen"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+convert_case = "0.11.0"
+darling = "0.23.0"
+proc-macro2 = "1.0.106"
+quote = "1.0.45"
+syn = { version = "2.0.110", default-features = false }
+
+[lints]
+workspace = true

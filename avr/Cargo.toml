@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = []
+members = ["bin/test-config"]
 
 [workspace.package]
 edition = "2024"
@@ -11,6 +11,7 @@ license = "MIT"
 either = { version = "1.16.0", default-features = false }
 nb = "1.1.0"
 nunny = { version = "0.2.2", default-features = false }
+panic-halt = "1.0.0"
 zerocopy = { version = "0.8.50", features = ["derive"] }
 
 # Generic HAL

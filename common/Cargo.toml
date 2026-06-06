@@ -1,10 +1,22 @@
 [workspace]
 resolver = "3"
-members = []
+members = [
+  "configurable",
+  "configurable/codegen",
+  "configurable/macros",
+  "test-config"
+]
 
 [workspace.package]
 edition = "2024"
 license = "MIT"
+
+[workspace.dependencies]
+configurable = { path = "configurable" }
+
+serde = { version = "1.0.228", features = ["derive"] }
+snafu = "0.9.1"
+zerocopy = { version = "0.8.50", features = ["derive"] }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

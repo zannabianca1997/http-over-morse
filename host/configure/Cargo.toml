@@ -1,0 +1,16 @@
+[package]
+name = "configure"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+configurable = { path = "../../common/configurable", features = ["configure"] }
+
+clap = { version = "4.6.1", features = ["derive"] }
+serde.workspace = true
+snafu = "0.9.1"
+toml = "1.1.2"
+
+[lints]
+workspace = true
