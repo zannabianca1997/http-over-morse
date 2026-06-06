@@ -1,0 +1,18 @@
+[package]
+name = "test-config"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+configurable.workspace = true
+serde = { workspace = true, optional = true }
+ufmt = "0.2.0"
+zerocopy.workspace = true
+
+[features]
+bin = []
+host = ["dep:serde"]
+
+[lints]
+workspace = true

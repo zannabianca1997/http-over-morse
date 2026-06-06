@@ -5,6 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+test-config = { path = "../../common/test-config", features = ["host"] }
+
 configurable = { path = "../../common/configurable", features = ["configure"] }
 
 clap = { version = "4.6.1", features = ["derive"] }
