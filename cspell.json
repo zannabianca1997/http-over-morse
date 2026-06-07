@@ -2,6 +2,11 @@
   "words": [
     "codegen",
     "atmega",
-    "rustflags"
+    "rustflags",
+    "Usart",
+    "portb",
+    "portc",
+    "portd",
+    "Baudrate"
   ]
 }

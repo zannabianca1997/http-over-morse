@@ -1,0 +1,27 @@
+[package]
+name = "hal"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[lib]
+bench = false
+test = false
+
+[dependencies]
+panic-halt = "1.0.0"
+
+# Generic HAL
+embedded-hal = "1.0.0"
+
+# AVR registers
+avr-device = { version = "0.8.1", features = ["atmega328p"] }
+
+# Arduino specific HAL
+[dependencies.arduino-hal]
+git = "https://github.com/rahix/avr-hal"
+rev = "e5c8f37fe48419956e722490a82b9ca9b9fc61a2"
+features = ["arduino-nano"]
+
+[lints]
+workspace = true

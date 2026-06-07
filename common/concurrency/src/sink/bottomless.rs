@@ -31,6 +31,10 @@ impl<I> Sink for Bottomless<I> {
     fn sink(&mut self, (): Self::Slot, item: I) {
         drop(item)
     }
+
+    fn flush(&mut self) -> nb::Result<(), Self::Err> {
+        Ok(())
+    }
 }
 
 impl<I> Default for Bottomless<I> {

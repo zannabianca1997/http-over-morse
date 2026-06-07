@@ -1,21 +1,20 @@
+#![doc = include_str!("../README.md")]
 #![no_std]
 
 use core::convert::Infallible;
 
-use arduino_hal::{
-    pac::USART0,
-    port::{
-        D0, D1, Pin,
-        mode::{Input, Output},
-    },
-    prelude::{_embedded_hal_serial_Read, _embedded_hal_serial_Write},
-    usart::{UsartReader, UsartWriter},
-};
 use concurrency::{sink::Sink, stream::Stream};
+use hal::serial::{SerialRead, SerialReader, SerialWrite, SerialWriter};
 
 /// Read bytes from the serial
 pub struct ReadSerial {
-    serial: UsartReader<USART0, Pin<Input, D0>, Pin<Output, D1>>,
+    serial: SerialReader,
+}
+
+impl ReadSerial {
+    pub fn new(serial: SerialReader) -> Self {
+        Self { serial }
+    }
 }
 
 impl Stream for ReadSerial {
@@ -36,8 +35,17 @@ pub struct Ready(Option<u8>);
 
 /// Write bytes into the serial
 pub struct WriteSerial {
-    serial: UsartWriter<USART0, Pin<Input, D0>, Pin<Output, D1>>,
+    serial: SerialWriter,
     writing: Option<u8>,
+}
+
+impl WriteSerial {
+    pub fn new(serial: SerialWriter) -> Self {
+        Self {
+            serial,
+            writing: None,
+        }
+    }
 }
 
 impl Sink for WriteSerial {
@@ -60,6 +68,15 @@ impl Sink for WriteSerial {
 
     fn sink(&mut self, Slot(()): Self::Slot, item: Self::Item) {
         self.writing = Some(item)
+    }
+
+    fn flush(&mut self) -> nb::Result<(), Self::Err> {
+        // Empty the buffer
+        if let Some(writing) = self.writing {
+            self.serial.write(writing)?;
+        };
+        // Flush the serial
+        self.serial.flush()
     }
 }
 

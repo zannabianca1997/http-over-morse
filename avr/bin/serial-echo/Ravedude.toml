@@ -1,0 +1,4 @@
+[general]
+board = "nano-new"
+open-console = true
+serial-baudrate = 9600

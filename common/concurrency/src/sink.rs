@@ -26,6 +26,9 @@ pub trait Sink {
 
     /// Get the next slot
     fn sink(&mut self, slot: Self::Slot, item: Self::Item);
+
+    /// Flush the sink, ensuring there are no unprocessed values
+    fn flush(&mut self) -> nb::Result<(), Self::Err>;
 }
 
 pub mod bottomless;

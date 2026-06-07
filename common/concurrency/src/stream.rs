@@ -46,4 +46,13 @@ pub trait StreamExt: Stream {
             handler,
         }
     }
+
+    /// Get a single item
+    fn stream_one(&mut self) -> nb::Result<Self::Item, Self::Err> {
+        let mut ready = self.ready()?;
+        let Some(item) = self.stream(&mut ready).map_err(nb::Error::Other)? else {
+            unreachable!("The first item should be guaranteed")
+        };
+        Ok(item)
+    }
 }

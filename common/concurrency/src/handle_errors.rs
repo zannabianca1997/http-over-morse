@@ -88,4 +88,14 @@ where
     fn sink(&mut self, slot: Self::Slot, item: Self::Item) {
         self.inner.sink(slot, item)
     }
+
+    fn flush(&mut self) -> nb::Result<(), Self::Err> {
+        loop {
+            match self.inner.flush() {
+                Ok(()) => return Ok(()),
+                Err(nb::Error::WouldBlock) => return Err(nb::Error::WouldBlock),
+                Err(nb::Error::Other(err)) => (self.handler)(err),
+            }
+        }
+    }
 }

@@ -9,8 +9,8 @@ bench = false
 test = false
 
 [dependencies]
-arduino-hal.workspace = true
 concurrency.workspace = true
+hal.workspace = true
 nb.workspace = true
 
 [lints]
