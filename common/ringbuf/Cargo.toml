@@ -1,0 +1,15 @@
+[package]
+name = "ringbuf"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+avr-device = { version = "0.8.1", optional = true }
+
+[features]
+default = ["atmega328p"]
+atmega328p = ["avr-device/atmega328p"]
+
+[lints]
+workspace = true

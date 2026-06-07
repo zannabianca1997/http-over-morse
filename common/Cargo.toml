@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["concurrency"]
+members = ["concurrency", "ringbuf"]
 
 [workspace.package]
 edition = "2024"
