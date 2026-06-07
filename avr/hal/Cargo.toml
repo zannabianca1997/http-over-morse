@@ -10,6 +10,7 @@ test = false
 
 [dependencies]
 panic-halt = "1.0.0"
+panic-never = "0.1.0"
 
 # Generic HAL
 embedded-hal = "1.0.0"

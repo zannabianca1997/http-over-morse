@@ -10,7 +10,10 @@ use serial::{ReadSerial, WriteSerial};
 fn main() -> ! {
     let Peripherals {
         serial: Serial { reader, writer },
-    } = Peripherals::new().unwrap();
+    } = unsafe {
+        // Safety: main just started
+        Peripherals::new_unchecked()
+    };
 
     ReadSerial::new(reader)
         .sink(WriteSerial::new(writer))

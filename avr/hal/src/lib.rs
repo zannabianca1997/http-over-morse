@@ -1,16 +1,13 @@
 #![doc = include_str!("../README.md")]
 #![no_std]
 
-// Only thing we can do when panic is to halt
-// TODO: maybe switch to `panic-never`!
-use panic_halt as _;
-
 pub use arduino_hal::entry;
 
 use pins::Pins;
 pub use serial::Serial;
 
-pub(crate) mod pins;
+mod panic;
+mod pins;
 pub mod serial;
 
 /// Peripherals used in the project
