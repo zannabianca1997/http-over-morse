@@ -1,6 +1,6 @@
 use core::convert::Infallible;
 
-use crate::process::handle_errors::HandleErrors;
+use crate::handle_errors::HandleErrors;
 
 /// A ongoing process
 pub trait Process {
@@ -11,17 +11,17 @@ pub trait Process {
     fn run(&mut self) -> nb::Error<Self::Err>;
 }
 
-pub mod handle_errors;
 pub mod idle;
 pub mod join;
 pub mod pipe;
 
 impl<T: Process> ProcessExt for T {}
-pub trait ProcessExt: Process + Sized {
+pub trait ProcessExt: Process {
     /// Block on this process forever
     fn block_on(mut self) -> !
     where
         Self: Process<Err = Infallible>,
+        Self: Sized,
     {
         loop {
             let nb::Error::WouldBlock = self.run();
@@ -32,9 +32,10 @@ pub trait ProcessExt: Process + Sized {
     fn handle_errors<H>(self, handler: H) -> HandleErrors<Self, H>
     where
         H: FnMut(Self::Err),
+        Self: Sized,
     {
         HandleErrors {
-            process: self,
+            inner: self,
             handler,
         }
     }

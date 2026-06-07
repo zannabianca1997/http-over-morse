@@ -2,7 +2,7 @@
 
 use core::{convert::Infallible, marker::PhantomData};
 
-use super::{Sink, Slot, Slots};
+use super::Sink;
 
 /// Infinite sink
 pub struct Bottomless<I>(PhantomData<I>);
@@ -17,35 +17,18 @@ impl<I> Sink for Bottomless<I> {
     type Item = I;
     type Err = Infallible;
 
-    type Slots<'s>
-        = InfiniteSlots<'s, I>
-    where
-        Self: 's;
+    type Slots = ();
+    type Slot = ();
 
-    fn slots(&mut self) -> nb::Result<Self::Slots<'_>, Self::Err> {
-        Ok(InfiniteSlots(PhantomData))
+    fn slots(&mut self) -> nb::Result<Self::Slots, Self::Err> {
+        Ok(())
     }
-}
 
-/// Unlimited slots in a infinite sink
-pub struct InfiniteSlots<'s, I>(PhantomData<&'s mut Bottomless<I>>);
-
-impl<'s, I> Slots<'s, Bottomless<I>> for InfiniteSlots<'s, I> {
-    type Slot<'a>
-        = BottomlessSlot<'a, I>
-    where
-        Self: 'a;
-
-    fn next(&mut self) -> Option<Self::Slot<'_>> {
-        Some(BottomlessSlot(PhantomData))
+    fn slot(&mut self, (): &mut Self::Slots) -> Result<Option<Self::Slot>, Self::Err> {
+        Ok(Some(()))
     }
-}
 
-/// Slot in a bottomless sink
-pub struct BottomlessSlot<'s, I>(PhantomData<&'s mut Bottomless<I>>);
-
-impl<'s, I> Slot<'s, Bottomless<I>> for BottomlessSlot<'s, I> {
-    fn sink(self, item: <Bottomless<I> as Sink>::Item) {
+    fn sink(&mut self, (): Self::Slot, item: I) {
         drop(item)
     }
 }

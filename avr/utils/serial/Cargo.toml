@@ -1,15 +1,16 @@
 [package]
-name = "encoding"
+name = "serial"
 version = "0.1.0"
 edition.workspace = true
+license.workspace = true
 
 [lib]
 bench = false
 test = false
 
 [dependencies]
-either.workspace = true
-morse.workspace = true
+arduino-hal.workspace = true
+concurrency.workspace = true
 nb.workspace = true
 
 [lints]

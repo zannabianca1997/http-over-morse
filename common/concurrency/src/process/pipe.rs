@@ -2,10 +2,7 @@
 
 use either::{Either, Left, Right};
 
-use crate::{
-    sink::{Sink, Slot, Slots},
-    stream::{Ready, Stream},
-};
+use crate::{sink::Sink, stream::Stream};
 
 use super::Process;
 
@@ -46,10 +43,14 @@ where
             //
             // Notice the order: get a slot, then get a item. There is no way to
             // drop an item here!
-            while let Some(slot) = slots.next()
-                && let Some(item) = ready.next()
-            {
-                slot.sink(item)
+            while let Some(slot) = match self.sink.slot(&mut slots) {
+                Ok(v) => v,
+                Err(err) => return nb::Error::Other(Right(err)),
+            } && let Some(item) = match self.stream.stream(&mut ready) {
+                Ok(v) => v,
+                Err(err) => return nb::Error::Other(Left(err)),
+            } {
+                self.sink.sink(slot, item)
             }
         }
     }

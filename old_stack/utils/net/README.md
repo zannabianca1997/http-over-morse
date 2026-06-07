@@ -1,3 +1,0 @@
-# net
-
-Common networking definitions

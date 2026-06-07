@@ -1,12 +1,15 @@
 [workspace]
 resolver = "3"
-members = []
+members = ["utils/*"]
 
 [workspace.package]
 edition = "2024"
 license = "MIT"
 
 [workspace.dependencies]
+# Utils from the common workspace
+concurrency = { path = "../common/concurrency" }
+
 # Mixed utils
 either = { version = "1.16.0", default-features = false }
 nb = "1.1.0"

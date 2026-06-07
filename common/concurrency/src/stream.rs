@@ -2,7 +2,7 @@
 //!
 //! Basis of pull-based concurrency
 
-use crate::{process::pipe::Pipe, sink::Sink};
+use crate::{handle_errors::HandleErrors, process::pipe::Pipe, sink::Sink};
 
 /// A stream of items
 pub trait Stream {
@@ -12,32 +12,38 @@ pub trait Stream {
     /// Error in this stream
     type Err;
 
-    /// Produced items
-    type Ready<'s>: Ready<'s, Self>
-    where
-        Self: 's;
+    /// Items that can be produced without blocking
+    type Ready;
 
     /// Get a non blocking list of ready items
-    fn ready(&mut self) -> nb::Result<Self::Ready<'_>, Self::Err>;
-}
+    fn ready(&mut self) -> nb::Result<Self::Ready, Self::Err>;
 
-pub trait Ready<'s, S>
-where
-    S: Stream + ?Sized + 's,
-{
-    /// Get the next item
-    fn next(&mut self) -> Option<S::Item>;
+    /// Get the next ready item
+    fn stream(&mut self, ready: &mut Self::Ready) -> Result<Option<Self::Item>, Self::Err>;
 }
 
 pub mod empty;
 
 impl<T: Stream> StreamExt for T {}
-pub trait StreamExt: Stream + Sized {
+pub trait StreamExt: Stream {
     /// Sink this stream
     fn sink<S>(self, sink: S) -> Pipe<Self, S>
     where
+        Self: Sized,
         S: Sink<Item = Self::Item>,
     {
         Pipe { stream: self, sink }
+    }
+
+    /// Handle the errors incoming
+    fn handle_errors<H>(self, handler: H) -> HandleErrors<Self, H>
+    where
+        Self: Sized,
+        H: FnMut(Self::Err),
+    {
+        HandleErrors {
+            inner: self,
+            handler,
+        }
     }
 }

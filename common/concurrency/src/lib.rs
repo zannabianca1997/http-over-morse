@@ -4,3 +4,5 @@
 pub mod process;
 pub mod sink;
 pub mod stream;
+
+pub mod handle_errors;

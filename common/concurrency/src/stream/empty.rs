@@ -17,29 +17,19 @@ impl<I> Stream for Empty<I> {
     type Item = I;
     type Err = Infallible;
 
-    type Ready<'s>
-        = NoneReady<'s, I>
-    where
-        Self: 's;
+    type Ready = NoItems;
 
-    fn ready(&mut self) -> nb::Result<Self::Ready<'_>, Self::Err> {
+    fn ready(&mut self) -> nb::Result<Self::Ready, Self::Err> {
         nb::Result::Err(nb::Error::WouldBlock)
     }
-}
 
-/// No ready items
-pub struct NoneReady<'s, I> {
-    stream: PhantomData<&'s mut Empty<I>>,
-    /// Ensure the compiler does not bother with creating this type
-    uninhabited: Uninhabited,
-}
-enum Uninhabited {}
-
-impl<'s, I> super::Ready<'s, Empty<I>> for NoneReady<'s, I> {
-    fn next(&mut self) -> Option<I> {
-        match self.uninhabited {}
+    fn stream(&mut self, ready: &mut Self::Ready) -> Result<Option<Self::Item>, Self::Err> {
+        match *ready {}
     }
 }
+
+/// There are never ready items
+pub enum NoItems {}
 
 impl<I> Default for Empty<I> {
     fn default() -> Self {

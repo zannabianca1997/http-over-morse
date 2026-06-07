@@ -2,7 +2,7 @@
 //!
 //! Basis of push-based concurrency
 
-use crate::{process::pipe::Pipe, stream::Stream};
+use crate::{handle_errors::HandleErrors, process::pipe::Pipe, stream::Stream};
 
 /// A sink of items
 pub trait Sink {
@@ -12,47 +12,44 @@ pub trait Sink {
     /// Error in this stream
     type Err;
 
-    /// Non blocking writer of consumed items
-    type Slots<'s>: Slots<'s, Self>
-    where
-        Self: 's;
+    /// Slots for items to be consumed without blocking
+    type Slots;
+
+    /// Slot for a single item to be consumed
+    type Slot;
 
     /// Get a non blocking writer of consumed items
-    fn slots(&mut self) -> nb::Result<Self::Slots<'_>, Self::Err>;
-}
+    fn slots(&mut self) -> nb::Result<Self::Slots, Self::Err>;
 
-/// Non blocking writer of consumed items
-pub trait Slots<'s, S>
-where
-    S: Sink + ?Sized + 's,
-{
-    type Slot<'a>: Slot<'a, S>
-    where
-        Self: 'a,
-        S: 'a;
+    /// Get the next slot, if available
+    fn slot(&mut self, slots: &mut Self::Slots) -> Result<Option<Self::Slot>, Self::Err>;
 
-    /// Get a slot if still available
-    fn next(&mut self) -> Option<Self::Slot<'_>>;
-}
-
-/// Consumer of a single item
-pub trait Slot<'s, S>
-where
-    S: Sink + ?Sized + 's,
-{
-    /// Get a slot if still available
-    fn sink(self, item: S::Item);
+    /// Get the next slot
+    fn sink(&mut self, slot: Self::Slot, item: Self::Item);
 }
 
 pub mod bottomless;
 
 impl<T: Sink> SinkExt for T {}
-pub trait SinkExt: Sink + Sized {
+pub trait SinkExt: Sink {
     /// Stream items into this sink
     fn stream<S>(self, stream: S) -> Pipe<S, Self>
     where
+        Self: Sized,
         S: Stream<Item = Self::Item>,
     {
         Pipe { stream, sink: self }
+    }
+
+    /// Handle the errors incoming
+    fn handle_errors<H>(self, handler: H) -> HandleErrors<Self, H>
+    where
+        Self: Sized,
+        H: FnMut(Self::Err),
+    {
+        HandleErrors {
+            inner: self,
+            handler,
+        }
     }
 }
