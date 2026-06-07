@@ -1,10 +1,20 @@
 [workspace]
 resolver = "3"
-members = []
+members = ["concurrency"]
 
 [workspace.package]
 edition = "2024"
 license = "MIT"
+
+[workspace.dependencies]
+concurrency = { path = "concurrency" }
+
+# General purpose
+
+either = { version = "1.16.0", default-features = false }
+nb = "1.1.0"
+nunny = { version = "0.2.2", default-features = false }
+zerocopy = { version = "0.8.50", features = ["derive"] }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
