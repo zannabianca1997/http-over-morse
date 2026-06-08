@@ -8,7 +8,7 @@ use crate::sync::{
 
 /// A contiguous view in a buffer
 struct Region<
-    'b,
+    'o,
     T,
     Sync: Synchronization = DefaultSynchronization,
     CS: MaybeCriticalSection<Sync> = NoCriticalSection,
@@ -18,9 +18,9 @@ struct Region<
     /// The region only ever shrinks from the front
     original_len: usize,
     /// Slice of the buffer this region has unique use of
-    region: &'b mut [MaybeUninit<T>],
+    region: &'o mut [MaybeUninit<T>],
     /// Head or tail of the buffer, the one set to the start of the region
-    start_index_storage: &'b Sync::Usize,
+    start_index_storage: &'o Sync::Usize,
     /// Possible critical section in which this region is used, to avoid
     /// declaring one during `drop`
     cs: CS,
@@ -62,7 +62,7 @@ impl<'o, T, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> Region<'o, T,
 // - duplicate values!
 //
 // Avoiding this looks impossible without runtime overhead...
-impl<'b, 'o, T, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> Drop
+impl<'o, T, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> Drop
     for Region<'o, T, Sync, CS>
 {
     fn drop(&mut self) {
@@ -82,10 +82,10 @@ pub struct ReadRegion<
     CS: MaybeCriticalSection<Sync> = NoCriticalSection,
 >(Region<'o, T, Sync, CS>);
 
-impl<'o, T, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> ReadRegion<'o, T, Sync, CS> {
+impl<'b, T, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> ReadRegion<'b, T, Sync, CS> {
     pub(crate) fn new(
-        region: &'o mut [MaybeUninit<T>],
-        start_index_storage: &'o Sync::Usize,
+        region: &'b mut [MaybeUninit<T>],
+        start_index_storage: &'b Sync::Usize,
         cs: CS,
     ) -> Self {
         Self(Region::new(region, start_index_storage, cs))
