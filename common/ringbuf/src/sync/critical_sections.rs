@@ -4,6 +4,8 @@ use core::cell::Cell;
 
 use avr_device::interrupt::{CriticalSection, Mutex, free};
 
+use crate::sync::CostlyCriticalSection;
+
 use super::{MaybeCriticalSection, Synchronization, sealed::Sealed};
 
 /// Synchronization through critical sections
@@ -39,3 +41,6 @@ impl<'cs> MaybeCriticalSection<CriticalSections>
         fun(self)
     }
 }
+
+impl Sealed for CriticalSection<'_> {}
+impl CostlyCriticalSection for CriticalSection<'_> {}

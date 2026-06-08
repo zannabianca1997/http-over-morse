@@ -18,6 +18,9 @@ pub trait Synchronization: sealed::Sealed {
     fn get_mut(var: &mut Self::Usize) -> &mut usize;
 }
 
+/// Marker trait to mark critical section that have a runtime cost to open
+pub trait CostlyCriticalSection: sealed::Sealed {}
+
 #[cfg(target_has_atomic = "ptr")]
 mod atomics;
 #[cfg(target_has_atomic = "ptr")]

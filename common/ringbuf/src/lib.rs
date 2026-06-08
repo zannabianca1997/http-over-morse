@@ -12,6 +12,8 @@ pub use reader::Reader;
 pub use region::{ReadRegion, WriteRegion};
 pub use writer::Writer;
 
+use crate::sync::CostlyCriticalSection;
+
 mod reader;
 mod region;
 pub mod sync;
@@ -93,7 +95,10 @@ impl<T, const CAP: usize, Sync: Synchronization> Buffer<T, CAP, Sync> {
     pub const unsafe fn writer_cs<'b, 's>(
         &'b self,
         cs: Sync::CS<'s>,
-    ) -> Writer<'b, T, CAP, Sync, Sync::CS<'s>> {
+    ) -> Writer<'b, T, CAP, Sync, Sync::CS<'s>>
+    where
+        Sync::CS<'s>: CostlyCriticalSection,
+    {
         Writer::new(self, cs)
     }
 
@@ -115,7 +120,10 @@ impl<T, const CAP: usize, Sync: Synchronization> Buffer<T, CAP, Sync> {
     pub const unsafe fn reader_cs<'b, 's>(
         &'b self,
         cs: Sync::CS<'s>,
-    ) -> Reader<'b, T, CAP, Sync, Sync::CS<'s>> {
+    ) -> Reader<'b, T, CAP, Sync, Sync::CS<'s>>
+    where
+        Sync::CS<'s>: CostlyCriticalSection,
+    {
         Reader::new(self, cs)
     }
 
