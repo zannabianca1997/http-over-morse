@@ -76,7 +76,7 @@ where
             slice::from_raw_parts_mut(start, len)
         };
 
-        WriteRegion::new(region, &self.buffer.head, self.cs)
+        WriteRegion::new(region, &self.buffer.tail, self.cs)
     }
 
     /// Start and end of the uninitialized part
