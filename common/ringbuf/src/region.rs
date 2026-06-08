@@ -150,6 +150,7 @@ impl<'o, T, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> WriteRegion<'
 }
 
 #[cfg(test)]
+#[cfg(target_has_atomic = "ptr")]
 mod tests {
     use crate::{Buffer, sync::Atomics};
 

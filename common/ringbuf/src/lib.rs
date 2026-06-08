@@ -157,6 +157,7 @@ impl<T, const CAP: usize, Sync: Synchronization> Drop for Buffer<T, CAP, Sync> {
 }
 
 #[cfg(test)]
+#[cfg(target_has_atomic = "ptr")]
 mod tests {
     use super::*;
     use crate::sync::Atomics;
@@ -310,11 +311,10 @@ mod tests {
         assert_eq!(r.pop(), None);
     }
 
-    /// DATA RACE: concurrent producer/consumer. On x86 (TSO) this usually
-    /// passes despite the `Relaxed` ordering; run under
-    /// `MIRIFLAGS=-Zmiri-many-seeds` to surface the data race on the contents.
+    /// Concurrent producer/consumer. With the `Acquire`/`Release` ordering this
+    /// is race-free; run it under Miri (ideally `MIRIFLAGS=-Zmiri-many-seeds`)
+    /// to exercise many interleavings and confirm no data race remains.
     #[test]
-    #[ignore = "writing and reading condurrently is a data race (run under Miri -Zmiri-many-seeds)"]
     fn spsc_concurrent() {
         const N: i32 = 1000;
         let mut buf = Buffer::<i32, 16, Atomics>::new();
@@ -335,7 +335,7 @@ mod tests {
                 let mut expected = 0;
                 while expected < N {
                     if let Some(v) = r.pop() {
-                        assert_eq!(v, expected, "B2: corrupted / reordered value");
+                        assert_eq!(v, expected, "Data race: corrupted / reordered value");
                         expected += 1;
                     } else {
                         std::thread::yield_now();

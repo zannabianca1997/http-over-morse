@@ -1,6 +1,9 @@
 //! Synchronize using atomics
 
-use core::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+use core::sync::atomic::{
+    AtomicUsize,
+    Ordering::{Acquire, Release},
+};
 
 use crate::sync::NoCriticalSection;
 
@@ -20,11 +23,17 @@ impl Synchronization for Atomics {
     }
 
     fn get(NoCriticalSection: Self::CS<'_>, var: &Self::Usize) -> usize {
-        var.load(Relaxed)
+        // Acquire pairs with the `Release` in `wrapping_add` on the other side:
+        // a reader that observes the writer's new `tail` (or vice-versa for
+        // `head`) is guaranteed to also see the slot writes that preceded it,
+        // giving the happens-before this SPSC buffer relies on.
+        var.load(Acquire)
     }
 
     fn wrapping_add(NoCriticalSection: Self::CS<'_>, var: &Self::Usize, value: usize) {
-        var.fetch_add(value, Relaxed);
+        // Release: publish the slot reads/writes performed by this region
+        // before the cursor advance becomes visible to the other side.
+        var.fetch_add(value, Release);
     }
 
     fn get_mut(var: &mut Self::Usize) -> &mut usize {

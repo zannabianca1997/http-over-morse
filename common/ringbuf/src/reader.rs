@@ -109,6 +109,7 @@ where
 }
 
 #[cfg(test)]
+#[cfg(target_has_atomic = "ptr")]
 mod tests {
     use crate::{Buffer, sync::Atomics};
 
