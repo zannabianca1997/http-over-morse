@@ -107,3 +107,46 @@ where
         (start, init_non_wrapping_len)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{Buffer, sync::Atomics};
+
+    /// A read region is empty exactly when the buffer is empty.
+    #[test]
+    fn read_region_empty_only_when_empty() {
+        let mut buf = Buffer::<i32, 4, Atomics>::new();
+        let (mut w, mut r) = buf.split();
+
+        assert!(r.read().is_empty());
+        w.push(7).unwrap();
+        assert!(!r.read().is_empty());
+    }
+
+    /// When the filled data wraps the backing array, a single read region is
+    /// truncated at the wrap boundary (it does not span the seam).
+    #[test]
+    fn read_region_truncates_at_wrap() {
+        let mut buf = Buffer::<i32, 4, Atomics>::new();
+        let (mut w, mut r) = buf.split();
+
+        for i in 0..4 {
+            w.push(i).unwrap();
+        }
+        assert_eq!(r.pop(), Some(0));
+        assert_eq!(r.pop(), Some(1));
+        // Re-fill the freed slots, so logical data now wraps: slots 2,3,0,1.
+        w.push(4).unwrap();
+        w.push(5).unwrap();
+
+        // head is at index 2; the contiguous run is slots 2,3 -> length 2.
+        assert_eq!(r.read().len(), 2);
+
+        // Draining still yields the correct order across the seam.
+        assert_eq!(r.pop(), Some(2));
+        assert_eq!(r.pop(), Some(3));
+        assert_eq!(r.pop(), Some(4));
+        assert_eq!(r.pop(), Some(5));
+        assert_eq!(r.pop(), None);
+    }
+}

@@ -106,3 +106,38 @@ where
         (start, uninit_non_wrapping_len)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{Buffer, sync::Atomics};
+
+    /// A write region is empty exactly when the buffer is full.
+    #[test]
+    fn write_region_empty_only_when_full() {
+        let mut buf = Buffer::<i32, 4, Atomics>::new();
+        let (mut w, _r) = buf.split();
+
+        assert!(!w.write().is_empty());
+        for i in 0..4 {
+            w.push(i).unwrap();
+        }
+        assert!(w.write().is_empty());
+    }
+
+    /// When the free space wraps the backing array, a single write region is
+    /// truncated at the wrap boundary.
+    #[test]
+    fn write_region_truncates_at_wrap() {
+        let mut buf = Buffer::<i32, 4, Atomics>::new();
+        let (mut w, mut r) = buf.split();
+
+        for i in 0..3 {
+            w.push(i).unwrap();
+        }
+        assert_eq!(r.pop(), Some(0)); // free space is now slots 3 then 0
+
+        // tail is at index 3; the contiguous free run is just slot 3 -> len 1.
+        assert_eq!(w.write().len(), 1);
+        assert_eq!(w.available(), 2);
+    }
+}

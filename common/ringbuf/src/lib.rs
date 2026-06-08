@@ -1,6 +1,9 @@
 #![doc = include_str!("../README.md")]
 #![no_std]
 
+#[cfg(test)]
+extern crate std;
+
 use core::{cell::UnsafeCell, mem::MaybeUninit};
 
 use sync::{MaybeCriticalSection, NoCriticalSection, Synchronization};
@@ -150,5 +153,195 @@ impl<T, const CAP: usize, Sync: Synchronization> Drop for Buffer<T, CAP, Sync> {
 
             *head = head.wrapping_add(1);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sync::Atomics;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering::SeqCst},
+    };
+
+    /// A `T` whose destructor counts how many times it runs, to catch
+    /// double-frees and missed drops.
+    #[derive(Debug)]
+    struct DropCounter(Arc<AtomicUsize>);
+    impl Drop for DropCounter {
+        fn drop(&mut self) {
+            self.0.fetch_add(1, SeqCst);
+        }
+    }
+
+    /// Basic FIFO ordering.
+    #[test]
+    fn fifo_roundtrip() {
+        let mut buf = Buffer::<i32, 4, Atomics>::new();
+        let (mut w, mut r) = buf.split();
+
+        assert_eq!(w.push(1), Ok(()));
+        assert_eq!(w.push(2), Ok(()));
+        assert_eq!(w.push(3), Ok(()));
+
+        assert_eq!(r.pop(), Some(1));
+        assert_eq!(r.pop(), Some(2));
+        assert_eq!(r.pop(), Some(3));
+        assert_eq!(r.pop(), None);
+    }
+
+    /// Filling to capacity, `Err` on overflow, and `available()` tracking on
+    /// both sides.
+    #[test]
+    fn fills_and_reports_full() {
+        let mut buf = Buffer::<i32, 4, Atomics>::new();
+        let (mut w, mut r) = buf.split();
+
+        assert_eq!(w.available(), 4);
+        for i in 0..4 {
+            assert_eq!(w.push(i), Ok(()));
+        }
+        assert_eq!(w.available(), 0);
+        assert_eq!(w.push(99), Err(99));
+
+        assert_eq!(r.available(), 4);
+        assert_eq!(r.pop(), Some(0));
+        assert_eq!(w.available(), 1);
+    }
+
+    /// Push/pop many more times than CAP so the cursors wrap the backing array
+    /// repeatedly; ordering and values must stay correct.
+    #[test]
+    fn wraps_around() {
+        let mut buf = Buffer::<i32, 4, Atomics>::new();
+        let (mut w, mut r) = buf.split();
+
+        let mut next_push = 0;
+        let mut next_pop = 0;
+        for _ in 0..1000 {
+            while w.available() > 2 {
+                w.push(next_push).unwrap();
+                next_push += 1;
+            }
+            if let Some(v) = r.pop() {
+                assert_eq!(v, next_pop);
+                next_pop += 1;
+            }
+        }
+        while let Some(v) = r.pop() {
+            assert_eq!(v, next_pop);
+            next_pop += 1;
+        }
+        assert_eq!(next_pop, next_push);
+    }
+
+    /// Dropping the buffer with elements still inside must run each destructor
+    /// exactly once.
+    #[test]
+    fn buffer_drop_is_exact() {
+        let counter = Arc::new(AtomicUsize::new(0));
+        {
+            let mut buf = Buffer::<DropCounter, 4, Atomics>::new();
+            let (mut w, _r) = buf.split();
+            for _ in 0..3 {
+                w.push(DropCounter(counter.clone())).unwrap();
+            }
+            assert_eq!(counter.load(SeqCst), 0);
+            // w, _r, then buf drop here; buf::drop owns the 3 remaining
+        }
+        assert_eq!(counter.load(SeqCst), 3);
+    }
+
+    /// Popped elements are dropped exactly once and the remainder are dropped
+    /// by the buffer — no double free, no leak.
+    #[test]
+    fn pop_then_buffer_drop_is_exact() {
+        let counter = Arc::new(AtomicUsize::new(0));
+        {
+            let mut buf = Buffer::<DropCounter, 4, Atomics>::new();
+            let (mut w, mut r) = buf.split();
+            for _ in 0..4 {
+                w.push(DropCounter(counter.clone())).unwrap();
+            }
+            drop(r.pop());
+            drop(r.pop());
+            assert_eq!(counter.load(SeqCst), 2);
+            // 2 remain, dropped by buf::drop
+        }
+        assert_eq!(counter.load(SeqCst), 4);
+    }
+
+    /// A read region and a write region alive at the same time carve two `&mut`
+    /// slices out of the same backing array over disjoint ranges. This must be
+    /// accepted by Miri's aliasing model.
+    #[test]
+    fn regions_coexist() {
+        let mut buf = Buffer::<i32, 8, Atomics>::new();
+        let (mut w, mut r) = buf.split();
+        for i in 0..3 {
+            w.push(i).unwrap();
+        }
+
+        let mut rd = r.read(); // covers the filled range [0, 3)
+        let mut wr = w.write(); // covers the empty range [3, 8) — disjoint
+
+        assert_eq!(rd.pop(), Some(0));
+        wr.push(100).unwrap();
+
+        drop(wr); // tail += 1
+        drop(rd); // head += 1
+
+        assert_eq!(r.available(), 3); // {1, 2, 100}
+        assert_eq!(r.pop(), Some(1));
+        assert_eq!(r.pop(), Some(2));
+        assert_eq!(r.pop(), Some(100));
+    }
+
+    /// A buffer of zero-sized elements must still advance its cursors
+    #[test]
+    fn zst_makes_progress() {
+        let mut buf = Buffer::<(), 4, Atomics>::new();
+        let (mut w, mut r) = buf.split();
+
+        assert_eq!(w.push(()), Ok(()));
+        assert_eq!(r.available(), 1);
+        assert_eq!(r.pop(), Some(()));
+        assert_eq!(r.pop(), None);
+    }
+
+    /// DATA RACE: concurrent producer/consumer. On x86 (TSO) this usually
+    /// passes despite the `Relaxed` ordering; run under
+    /// `MIRIFLAGS=-Zmiri-many-seeds` to surface the data race on the contents.
+    #[test]
+    #[ignore = "writing and reading condurrently is a data race (run under Miri -Zmiri-many-seeds)"]
+    fn spsc_concurrent() {
+        const N: i32 = 1000;
+        let mut buf = Buffer::<i32, 16, Atomics>::new();
+        let (mut w, mut r) = buf.split();
+
+        std::thread::scope(|s| {
+            s.spawn(move || {
+                let mut i = 0;
+                while i < N {
+                    if w.push(i).is_ok() {
+                        i += 1;
+                    } else {
+                        std::thread::yield_now();
+                    }
+                }
+            });
+            s.spawn(move || {
+                let mut expected = 0;
+                while expected < N {
+                    if let Some(v) = r.pop() {
+                        assert_eq!(v, expected, "B2: corrupted / reordered value");
+                        expected += 1;
+                    } else {
+                        std::thread::yield_now();
+                    }
+                }
+            });
+        });
     }
 }
