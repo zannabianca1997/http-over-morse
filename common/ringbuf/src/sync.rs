@@ -13,8 +13,7 @@ pub trait Synchronization: sealed::Sealed {
     fn free<R>(fun: impl FnOnce(Self::CS<'_>) -> R) -> R;
 
     fn get(cs: Self::CS<'_>, var: &Self::Usize) -> usize;
-    fn set(cs: Self::CS<'_>, var: &Self::Usize, value: usize);
-    fn increment(cs: Self::CS<'_>, var: &Self::Usize, value: usize);
+    fn wrapping_add(cs: Self::CS<'_>, var: &Self::Usize, value: usize);
 
     fn get_mut(var: &mut Self::Usize) -> &mut usize;
 }

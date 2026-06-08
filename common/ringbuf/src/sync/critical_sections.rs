@@ -23,11 +23,7 @@ impl Synchronization for CriticalSections {
         var.borrow(cs).get()
     }
 
-    fn set(cs: Self::CS<'_>, var: &Self::Usize, value: usize) {
-        var.borrow(cs).set(value);
-    }
-
-    fn increment(cs: Self::CS<'_>, var: &Self::Usize, value: usize) {
+    fn wrapping_add(cs: Self::CS<'_>, var: &Self::Usize, value: usize) {
         var.borrow(cs).update(|t| t.wrapping_add(value));
     }
 
