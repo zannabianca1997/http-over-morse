@@ -42,7 +42,7 @@ where
     pub fn push(&mut self, item: T) -> Result<(), T> {
         // TODO: this is so much simpler that what this chain invokes. Check it
         // is being correctly optimized
-        self.write().push(item)
+        self.write(|r| r.push(item))
     }
 
     /// Obtain a region to write
@@ -52,7 +52,7 @@ where
     /// region is dropped.
     ///
     /// The returned region will be empty only if the buffer is full.
-    pub fn write<'s>(&'s mut self) -> WriteRegion<'s, T, Sync, CS> {
+    pub fn write<R>(&mut self, fun: impl FnOnce(&mut WriteRegion<'_, T, Sync, CS>) -> R) -> R {
         let (start, len) = self.fetch_start_and_len_contiguous();
 
         // Pointer to the start of the buffer
@@ -76,7 +76,14 @@ where
             slice::from_raw_parts_mut(start, len)
         };
 
-        WriteRegion::new(region, &self.buffer.tail, self.cs)
+        let mut region = WriteRegion::new(region, &self.buffer.tail, self.cs);
+
+        let res = fun(&mut region);
+
+        // Drop the region, updating the buffer
+        drop(region);
+
+        res
     }
 
     /// Start and end of the uninitialized part
@@ -118,11 +125,11 @@ mod tests {
         let mut buf = Buffer::<i32, 4, Atomics>::new();
         let (mut w, _r) = buf.split();
 
-        assert!(!w.write().is_empty());
+        assert!(!w.write(|reg| reg.is_empty()));
         for i in 0..4 {
             w.push(i).unwrap();
         }
-        assert!(w.write().is_empty());
+        assert!(w.write(|reg| reg.is_empty()));
     }
 
     /// When the free space wraps the backing array, a single write region is
@@ -138,7 +145,7 @@ mod tests {
         assert_eq!(r.pop(), Some(0)); // free space is now slots 3 then 0
 
         // tail is at index 3; the contiguous free run is just slot 3 -> len 1.
-        assert_eq!(w.write().len(), 1);
+        assert_eq!(w.write(|reg| reg.len()), 1);
         assert_eq!(w.available(), 2);
     }
 }

@@ -44,7 +44,7 @@ where
     pub fn pop(&mut self) -> Option<T> {
         // TODO: this is so much simpler that what this chain invokes. Check it
         // is being correctly optimized
-        self.read().pop()
+        self.read(|r| r.pop())
     }
 
     /// Obtain a region to read
@@ -54,7 +54,7 @@ where
     /// is dropped.
     ///
     /// The returned region will be empty only if the buffer itself is empty.
-    pub fn read<'s>(&'s mut self) -> ReadRegion<'s, T, Sync, CS> {
+    pub fn read<R>(&mut self, fun: impl FnOnce(&mut ReadRegion<'_, T, Sync, CS>) -> R) -> R {
         let (start, len) = self.fetch_start_and_len_contiguous();
 
         // Pointer to the start of the buffer
@@ -78,7 +78,14 @@ where
             slice::from_raw_parts_mut(start, len)
         };
 
-        ReadRegion::new(region, &self.buffer.head, self.cs)
+        let mut region = ReadRegion::new(region, &self.buffer.head, self.cs);
+
+        let res = fun(&mut region);
+
+        // Drop the region, updating the buffer
+        drop(region);
+
+        res
     }
 
     /// Start and end of the initialized part
@@ -119,9 +126,9 @@ mod tests {
         let mut buf = Buffer::<i32, 4, Atomics>::new();
         let (mut w, mut r) = buf.split();
 
-        assert!(r.read().is_empty());
+        assert!(r.read(|reg| reg.is_empty()));
         w.push(7).unwrap();
-        assert!(!r.read().is_empty());
+        assert!(!r.read(|reg| reg.is_empty()));
     }
 
     /// When the filled data wraps the backing array, a single read region is
@@ -141,7 +148,7 @@ mod tests {
         w.push(5).unwrap();
 
         // head is at index 2; the contiguous run is slots 2,3 -> length 2.
-        assert_eq!(r.read().len(), 2);
+        assert_eq!(r.read(|reg| reg.len()), 2);
 
         // Draining still yields the correct order across the seam.
         assert_eq!(r.pop(), Some(2));

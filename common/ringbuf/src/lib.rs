@@ -281,9 +281,9 @@ mod tests {
         assert_eq!(counter.load(SeqCst), 4);
     }
 
-    /// A read region and a write region alive at the same time carve two `&mut`
-    /// slices out of the same backing array over disjoint ranges. This must be
-    /// accepted by Miri's aliasing model.
+    /// A read region and a write region alive at the same time (nested
+    /// closures) carve two `&mut` slices out of the same backing array over
+    /// disjoint ranges. This must be accepted by Miri's aliasing model.
     #[test]
     fn regions_coexist() {
         let mut buf = Buffer::<i32, 8, Atomics>::new();
@@ -292,14 +292,14 @@ mod tests {
             w.push(i).unwrap();
         }
 
-        let mut rd = r.read(); // covers the filled range [0, 3)
-        let mut wr = w.write(); // covers the empty range [3, 8) — disjoint
-
-        assert_eq!(rd.pop(), Some(0));
-        wr.push(100).unwrap();
-
-        drop(wr); // tail += 1
-        drop(rd); // head += 1
+        // `rd` covers the filled range [0, 3); `wr` covers the empty range
+        // [3, 8). Both are live at once inside the nested closures.
+        r.read(|rd| {
+            w.write(|wr| {
+                assert_eq!(rd.pop(), Some(0));
+                wr.push(100).unwrap();
+            }); // wr drops here: tail += 1
+        }); // rd drops here: head += 1
 
         assert_eq!(r.available(), 3); // {1, 2, 100}
         assert_eq!(r.pop(), Some(1));
