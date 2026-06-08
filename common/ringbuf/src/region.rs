@@ -13,8 +13,10 @@ struct Region<
     Sync: Synchronization = DefaultSynchronization,
     CS: MaybeCriticalSection<Sync> = NoCriticalSection,
 > {
-    /// Start of the region at it's creation
-    original_start: *const MaybeUninit<T>,
+    /// Length of the region at its creation
+    ///
+    /// The region only ever shrinks from the front
+    original_len: usize,
     /// Slice of the buffer this region has unique use of
     region: &'b mut [MaybeUninit<T>],
     /// Head or tail of the buffer, the one set to the start of the region
@@ -27,7 +29,7 @@ struct Region<
 impl<'o, T, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> Region<'o, T, Sync, CS> {
     fn new(region: &'o mut [MaybeUninit<T>], start_index_storage: &'o Sync::Usize, cs: CS) -> Self {
         Self {
-            original_start: region.as_ptr_range().start,
+            original_len: region.len(),
             region,
             start_index_storage,
             cs,
@@ -64,14 +66,9 @@ impl<'b, 'o, T, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> Drop
     for Region<'o, T, Sync, CS>
 {
     fn drop(&mut self) {
-        // Obtain the new start of the region
-        let new_start = self.region.as_ptr_range().start;
-        // Calculate how many elements have been either read or written
-        let used = unsafe {
-            // Safety: `original_start` can be set only by `new` and it's part
-            // of the slice
-            new_start.offset_from_unsigned(self.original_start)
-        };
+        // The region only shrinks from the front, so the number of slots read
+        // or written is the difference between the original and current length.
+        let used = self.original_len - self.region.len();
         // Update the start of the region in the buffer
         self.cs
             .free(|cs| Sync::increment(cs, self.start_index_storage, used))
