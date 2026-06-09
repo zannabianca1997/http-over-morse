@@ -7,7 +7,7 @@ use ringbuf::{
 
 use crate::{
     ready::Ready,
-    sink::BufferSink,
+    sink::{BufferSink, Sink},
     slots::{Slot, Slots},
     stream::{BufferStream, Stream},
 };
@@ -41,13 +41,55 @@ where
     {
         let (mut writer, mut reader) = self.buffer.split();
 
-        // First fill itself from the inner, don't care if it manages or not to fill it
-        match writer.write(|region| self.inner.fill(region)) {
-            Ok(()) | Err(nb::Error::WouldBlock) => (),
-            Err(nb::Error::Other(err)) => return Err(err),
-        };
+        // First fill itself from the inner, until either buffer is full or inner would block
+        while writer.available() > 0 {
+            match writer.write(|region| self.inner.fill(region)) {
+                Ok(()) => (),
+                Err(nb::Error::WouldBlock) => break,
+                Err(nb::Error::Other(err)) => return Err(err),
+            }
+        }
 
         Ok(reader.read(|region| fun(region)))
+    }
+}
+
+impl<Inner, const CAP: usize, Sync: Synchronization> BufferSink
+    for Buffered<Inner, Inner::Item, CAP, Sync>
+where
+    Inner: Sink,
+{
+    type Item = Inner::Item;
+    type Err = Inner::Err;
+    type Slots<'s> = WriteRegion<'s, Inner::Item, Sync>;
+
+    fn with_slots<R>(
+        &mut self,
+        fun: impl FnOnce(&mut Self::Slots<'_>) -> R,
+    ) -> Result<R, Self::Err> {
+        let (mut writer, mut reader) = self.buffer.split();
+
+        // First sink all item available, until buffer is empty or inner would block
+        while reader.available() > 0 {
+            match reader.read(|region| self.inner.sink(region)) {
+                Ok(()) => (),
+                Err(nb::Error::WouldBlock) => break,
+                Err(nb::Error::Other(err)) => return Err(err),
+            }
+        }
+
+        Ok(writer.write(|region| fun(region)))
+    }
+
+    fn flush(&mut self) -> nb::Result<(), Self::Err> {
+        let (_, mut reader) = self.buffer.split();
+
+        // Sink all item available, until buffer is empty or inner would block
+        while reader.available() > 0 {
+            reader.read(|region| self.inner.sink(region))?;
+        }
+
+        Ok(())
     }
 }
 

@@ -6,6 +6,7 @@ use crate::{
     handle_errors::HandleErrors,
     process::pipe::Pipe,
     ready::Ready,
+    ringbuf::Buffered,
     slots::{Slot, Slots},
     stream::{BufferStream, Stream},
 };
@@ -18,6 +19,8 @@ pub trait Sink {
     type Err;
 
     /// Sink all item until blocks
+    ///
+    /// Returns `Ok` only if all items have been sunk
     fn sink<R>(&mut self, items: &mut R) -> nb::Result<(), Self::Err>
     where
         R: Ready<Item = Self::Item>;
@@ -109,5 +112,16 @@ pub trait SinkExt: Sink {
             inner: self,
             handler,
         }
+    }
+
+    /// Add a buffer in front of this sink
+    ///
+    /// The buffer will be eagerly emptied until blocking, then items will be
+    /// sunk from the buffer.
+    fn buffer<const CAP: usize>(self) -> Buffered<Self, Self::Item, CAP>
+    where
+        Self: Sized,
+    {
+        Buffered::new(self)
     }
 }

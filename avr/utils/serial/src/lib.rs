@@ -3,7 +3,12 @@
 
 use core::convert::Infallible;
 
-use concurrency::{sink::Sink, stream::Stream};
+use concurrency::{
+    ready::Ready,
+    sink::Sink,
+    slots::{Slot, Slots},
+    stream::Stream,
+};
 use hal::serial::{SerialRead, SerialReader, SerialWrite, SerialWriter};
 
 /// Read bytes from the serial
@@ -20,65 +25,46 @@ impl ReadSerial {
 impl Stream for ReadSerial {
     type Item = u8;
     type Err = Infallible;
-    type Ready = Ready;
 
-    fn ready(&mut self) -> nb::Result<Self::Ready, Self::Err> {
-        self.serial.read().map(|v| Ready(Some(v)))
-    }
-
-    fn stream(&mut self, ready: &mut Self::Ready) -> Result<Option<Self::Item>, Self::Err> {
-        Ok(ready.0.take())
+    fn fill<S>(&mut self, slots: &mut S) -> nb::Result<(), Self::Err>
+    where
+        S: Slots<Item = Self::Item>,
+    {
+        while let Some(slot) = slots.slot() {
+            let ch = self.serial.read()?;
+            slot.fill(ch);
+        }
+        Ok(())
     }
 }
-
-pub struct Ready(Option<u8>);
 
 /// Write bytes into the serial
 pub struct WriteSerial {
     serial: SerialWriter,
-    writing: Option<u8>,
 }
 
 impl WriteSerial {
     pub fn new(serial: SerialWriter) -> Self {
-        Self {
-            serial,
-            writing: None,
-        }
+        Self { serial }
     }
 }
 
 impl Sink for WriteSerial {
     type Item = u8;
     type Err = Infallible;
-    type Slots = Slots;
-    type Slot = Slot;
 
-    fn slots(&mut self) -> nb::Result<Self::Slots, Self::Err> {
-        if let Some(writing) = self.writing {
-            self.serial.write(writing)?;
-        };
-        self.writing = None;
-        Ok(Slots(Some(Slot(()))))
-    }
-
-    fn slot(&mut self, Slots(slot): &mut Self::Slots) -> Result<Option<Self::Slot>, Self::Err> {
-        Ok(slot.take())
-    }
-
-    fn sink(&mut self, Slot(()): Self::Slot, item: Self::Item) {
-        self.writing = Some(item)
+    fn sink<R>(&mut self, items: &mut R) -> nb::Result<(), Self::Err>
+    where
+        R: Ready<Item = Self::Item>,
+    {
+        while let Some(&next) = items.peek() {
+            self.serial.write(next)?;
+            items.pop();
+        }
+        Ok(())
     }
 
     fn flush(&mut self) -> nb::Result<(), Self::Err> {
-        // Empty the buffer
-        if let Some(writing) = self.writing {
-            self.serial.write(writing)?;
-        };
-        // Flush the serial
         self.serial.flush()
     }
 }
-
-pub struct Slots(Option<Slot>);
-pub struct Slot(());

@@ -6,6 +6,7 @@ use crate::{
     handle_errors::HandleErrors,
     process::pipe::Pipe,
     ready::Ready,
+    ringbuf::Buffered,
     sink::{BufferSink, Sink},
     slots::{Slot, Slots},
 };
@@ -98,5 +99,16 @@ pub trait StreamExt: Stream {
             inner: self,
             handler,
         }
+    }
+
+    /// Add a buffer in front of this stream
+    ///
+    /// The buffer will be eagerly filled until blocking, then items will be
+    /// streamed from the buffer.
+    fn buffer<const CAP: usize>(self) -> Buffered<Self, Self::Item, CAP>
+    where
+        Self: Sized,
+    {
+        Buffered::new(self)
     }
 }
