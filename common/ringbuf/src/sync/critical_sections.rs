@@ -4,6 +4,8 @@ use core::cell::Cell;
 
 use avr_device::interrupt::{CriticalSection, Mutex, free};
 
+use crate::sync::{DefineCriticalSectionMethods, StaticSyncronization};
+
 use super::{Synchronization, sealed::Sealed};
 
 /// Synchronization through short critical sections around the atomic operations
@@ -32,6 +34,10 @@ impl Synchronization for ShortCriticalSections {
         free(fun)
     }
 }
+impl StaticSyncronization for ShortCriticalSections {
+    const DEFAULT: Self = ShortCriticalSections;
+}
+impl DefineCriticalSectionMethods for ShortCriticalSections {}
 
 /// Syncronization in a critical section
 impl Sealed for CriticalSection<'_> {}

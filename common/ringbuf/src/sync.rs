@@ -16,6 +16,9 @@ pub trait Synchronization: sealed::Sealed + Copy {
     fn wrapping_add(self, var: &Self::Usize, value: usize);
     fn get_mut(var: &mut Self::Usize) -> &mut usize;
 }
+pub trait StaticSyncronization: Synchronization + 'static {
+    const DEFAULT: Self;
+}
 /// This sinchronization has significant critical sections, so methods to
 /// provide them should be offered
 ///

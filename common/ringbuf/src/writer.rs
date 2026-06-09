@@ -2,7 +2,7 @@ use core::{cmp::min, mem::MaybeUninit, slice};
 
 use crate::{
     Buffer, WriteRegion,
-    sync::{DefaultSynchronization, Synchronization},
+    sync::{DefaultSynchronization, StaticSyncronization, Synchronization},
 };
 
 /// Writable view into a buffer
@@ -13,8 +13,8 @@ pub struct Writer<
     'b,
     T,
     const CAP: usize,
-    BufferSync: Synchronization = DefaultSynchronization,
-    Sync: Synchronization<Usize = BufferSync::Usize> = BufferSync,
+    BufferSync: StaticSyncronization = DefaultSynchronization,
+    Sync = BufferSync,
 > {
     buffer: &'b Buffer<T, CAP, BufferSync>,
     sync: Sync,
@@ -24,7 +24,7 @@ impl<
     'b,
     T,
     const CAP: usize,
-    BufferSync: Synchronization,
+    BufferSync: StaticSyncronization,
     Sync: Synchronization<Usize = BufferSync::Usize>,
 > Writer<'b, T, CAP, BufferSync, Sync>
 {
