@@ -28,12 +28,12 @@ pub type Buffer<T, const CAP: usize, Sync = Unsync> = crate::Buffer<T, CAP, Sync
 
 impl<T, const CAP: usize, Sync: ProvidesIndices> crate::Buffer<T, CAP, Sync> {
     /// Get a writing handle to this buffer through a mutable reference
-    pub const fn writer_mut(&mut self) -> Writer<'_, T, CAP> {
+    pub const fn writer_mut(&mut self) -> Writer<'_, T, CAP, Sync> {
         Writer::new(self)
     }
 
     /// Get a reading handle to this buffer through a mutable reference
-    pub const unsafe fn reader_mut(&mut self) -> Reader<'_, T, CAP> {
+    pub const fn reader_mut(&mut self) -> Reader<'_, T, CAP, Sync> {
         Reader::new(self)
     }
 
