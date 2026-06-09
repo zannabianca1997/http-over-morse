@@ -2,16 +2,10 @@
 
 use core::{marker::PhantomData, mem::MaybeUninit, ptr::NonNull};
 
-use crate::sync::{
-    DefaultSynchronization, MaybeCriticalSection, NoCriticalSection, Synchronization,
-};
+use crate::sync::{DefaultSynchronization, Synchronization};
 
 /// A contiguous view in a buffer
-struct RawRegion<
-    'o,
-    Sync: Synchronization = DefaultSynchronization,
-    CS: MaybeCriticalSection<Sync> = NoCriticalSection,
-> {
+struct RawRegion<'o, Sync: Synchronization = DefaultSynchronization> {
     /// Slice of the buffer this region has unique use of
     ///
     /// Stored as a type erased pointer to select variance after
@@ -24,16 +18,15 @@ struct RawRegion<
     original_len: usize,
     /// Head or tail of the buffer, the one set to the start of the region
     start_index_storage: &'o Sync::Usize,
-    /// Possible critical section in which this region is used, to avoid
-    /// declaring one during `drop`
-    cs: CS,
+    /// Syncronization primitive used
+    sync: Sync,
 }
 
-impl<'o, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> RawRegion<'o, Sync, CS> {
+impl<'o, Sync: Synchronization> RawRegion<'o, Sync> {
     fn new<T>(
         region: &'o mut [MaybeUninit<T>],
         start_index_storage: &'o Sync::Usize,
-        cs: CS,
+        sync: Sync,
     ) -> Self {
         let len = region.len();
         let region = NonNull::from_mut(region).cast();
@@ -42,7 +35,7 @@ impl<'o, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> RawRegion<'o, Sy
             region,
             len,
             start_index_storage,
-            cs,
+            sync,
         }
     }
 
@@ -73,35 +66,29 @@ impl<'o, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> RawRegion<'o, Sy
 //
 // Avoiding this looks impossible without runtime overhead... so we just never
 // give the caller an owned [`Region`]
-impl<'o, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> Drop for RawRegion<'o, Sync, CS> {
+impl<'o, Sync: Synchronization> Drop for RawRegion<'o, Sync> {
     fn drop(&mut self) {
         // The region only shrinks from the front, so the number of slots read
         // or written is the difference between the original and current length.
         let used = self.original_len - self.len;
         // Update the start of the region in the buffer
-        self.cs
-            .free(|cs| Sync::wrapping_add(cs, self.start_index_storage, used))
+        self.sync.wrapping_add(self.start_index_storage, used)
     }
 }
 
-pub struct ReadRegion<
-    'o,
-    T,
-    Sync: Synchronization = DefaultSynchronization,
-    CS: MaybeCriticalSection<Sync> = NoCriticalSection,
-> {
-    raw: RawRegion<'o, Sync, CS>,
+pub struct ReadRegion<'o, T, Sync: Synchronization = DefaultSynchronization> {
+    raw: RawRegion<'o, Sync>,
     _phantom: PhantomData<T>,
 }
 
-impl<'b, T, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> ReadRegion<'b, T, Sync, CS> {
+impl<'o, T, Sync: Synchronization> ReadRegion<'o, T, Sync> {
     pub(crate) fn new(
-        region: &'b mut [MaybeUninit<T>],
-        start_index_storage: &'b Sync::Usize,
-        cs: CS,
+        region: &'o mut [MaybeUninit<T>],
+        start_index_storage: &'o Sync::Usize,
+        sync: Sync,
     ) -> Self {
         Self {
-            raw: RawRegion::new(region, start_index_storage, cs),
+            raw: RawRegion::new(region, start_index_storage, sync),
             _phantom: PhantomData,
         }
     }
@@ -153,24 +140,19 @@ impl<'b, T, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> ReadRegion<'b
     }
 }
 
-pub struct WriteRegion<
-    'o,
-    T,
-    Sync: Synchronization = DefaultSynchronization,
-    CS: MaybeCriticalSection<Sync> = NoCriticalSection,
-> {
-    raw: RawRegion<'o, Sync, CS>,
+pub struct WriteRegion<'o, T, Sync: Synchronization = DefaultSynchronization> {
+    raw: RawRegion<'o, Sync>,
     _phantom: PhantomData<fn(T)>,
 }
 
-impl<'o, T, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> WriteRegion<'o, T, Sync, CS> {
+impl<'o, T, Sync: Synchronization> WriteRegion<'o, T, Sync> {
     pub(crate) fn new(
         region: &'o mut [MaybeUninit<T>],
         start_index_storage: &'o Sync::Usize,
-        cs: CS,
+        sync: Sync,
     ) -> Self {
         Self {
-            raw: RawRegion::new(region, start_index_storage, cs),
+            raw: RawRegion::new(region, start_index_storage, sync),
             _phantom: PhantomData,
         }
     }

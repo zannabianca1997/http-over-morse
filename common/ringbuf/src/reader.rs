@@ -4,7 +4,7 @@ use core::{cmp::min, mem::MaybeUninit, slice};
 
 use crate::{
     Buffer, ReadRegion,
-    sync::{DefaultSynchronization, MaybeCriticalSection, NoCriticalSection, Synchronization},
+    sync::{DefaultSynchronization, Synchronization},
 };
 
 /// Readable view into a buffer
@@ -15,19 +15,23 @@ pub struct Reader<
     'b,
     T,
     const CAP: usize,
-    Sync: Synchronization = DefaultSynchronization,
-    CS = NoCriticalSection,
+    BufferSync: Synchronization = DefaultSynchronization,
+    Sync: Synchronization<Usize = BufferSync::Usize> = BufferSync,
 > {
-    buffer: &'b Buffer<T, CAP, Sync>,
-    cs: CS,
+    buffer: &'b Buffer<T, CAP, BufferSync>,
+    sync: Sync,
 }
 
-impl<'b, T, const CAP: usize, Sync: Synchronization, CS> Reader<'b, T, CAP, Sync, CS>
-where
-    CS: MaybeCriticalSection<Sync>,
+impl<
+    'b,
+    T,
+    const CAP: usize,
+    BufferSync: Synchronization,
+    Sync: Synchronization<Usize = BufferSync::Usize>,
+> Reader<'b, T, CAP, BufferSync, Sync>
 {
-    pub(crate) const fn new(buffer: &'b Buffer<T, CAP, Sync>, cs: CS) -> Self {
-        Self { buffer, cs }
+    pub(crate) const fn new(buffer: &'b Buffer<T, CAP, BufferSync>, sync: Sync) -> Self {
+        Self { buffer, sync }
     }
 
     /// Return the amount of filled space currently available in the buffer.
@@ -54,7 +58,7 @@ where
     /// is dropped.
     ///
     /// The returned region will be empty only if the buffer itself is empty.
-    pub fn read<R>(&mut self, fun: impl FnOnce(&mut ReadRegion<'_, T, Sync, CS>) -> R) -> R {
+    pub fn read<R>(&mut self, fun: impl FnOnce(&mut ReadRegion<'_, T, Sync>) -> R) -> R {
         let (start, len) = self.fetch_start_and_len_contiguous();
 
         // Pointer to the start of the buffer
@@ -78,7 +82,7 @@ where
             slice::from_raw_parts_mut(start, len)
         };
 
-        let mut region = ReadRegion::new(region, &self.buffer.head, self.cs);
+        let mut region = ReadRegion::new(region, &self.buffer.head, self.sync);
 
         let res = fun(&mut region);
 
@@ -90,7 +94,7 @@ where
 
     /// Start and end of the initialized part
     fn fetch_start_and_end(&self) -> (usize, usize) {
-        let (head, tail) = self.buffer.get_head_and_tail(&self.cs);
+        let (head, tail) = self.buffer.get_head_and_tail(self.sync);
 
         let start = head;
         let end = tail;

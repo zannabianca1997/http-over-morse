@@ -6,13 +6,13 @@ extern crate std;
 
 use core::{cell::UnsafeCell, mem::MaybeUninit};
 
-use sync::{MaybeCriticalSection, NoCriticalSection, Synchronization};
+use sync::Synchronization;
 
 pub use reader::Reader;
 pub use region::{ReadRegion, WriteRegion, WriteRegionSlot};
 pub use writer::Writer;
 
-use crate::sync::CostlyCriticalSection;
+use crate::sync::DefineCriticalSectionMethods;
 
 mod reader;
 mod region;
@@ -69,10 +69,13 @@ impl<T, const CAP: usize, Sync: Synchronization> Buffer<T, CAP, Sync> {
     /// Get both handlers to the buffer.
     ///
     /// Ensure uniqueness by taking a mutable reference
-    pub fn split(&mut self) -> (Writer<'_, T, CAP, Sync>, Reader<'_, T, CAP, Sync>) {
+    pub fn split(&mut self) -> (Writer<'_, T, CAP, Sync>, Reader<'_, T, CAP, Sync>)
+    where
+        Sync: Default,
+    {
         (
-            Writer::new(self, NoCriticalSection),
-            Reader::new(self, NoCriticalSection),
+            Writer::new(self, Sync::default()),
+            Reader::new(self, Sync::default()),
         )
     }
 
@@ -80,24 +83,25 @@ impl<T, const CAP: usize, Sync: Synchronization> Buffer<T, CAP, Sync> {
     ///
     /// Safety: the caller must ensure that only a single [`Writer`] pointing to
     /// the same buffer exists.
-    pub const unsafe fn writer(&self) -> Writer<'_, T, CAP, Sync> {
-        Writer::new(self, NoCriticalSection)
+    pub unsafe fn writer(&self) -> Writer<'_, T, CAP, Sync>
+    where
+        Sync: Default,
+    {
+        Writer::new(self, Sync::default())
     }
 
-    /// Get a writing handle to this buffer while a critical section
+    /// Get a writing handle to this buffer inside a critical section.
     ///
-    /// This will enable the handle to avoid declaring unnecessary critical
-    /// sections.
+    /// This will avoid declaring unneeded critical sections.
     ///
     /// Safety: the caller must ensure that only a single [`Writer`] pointing to
-    /// the same buffer exists, even while in a critical section (the other
-    /// might be halfway writing)
-    pub const unsafe fn writer_cs<'b, 's>(
-        &'b self,
-        cs: Sync::CS<'s>,
-    ) -> Writer<'b, T, CAP, Sync, Sync::CS<'s>>
+    /// the same buffer exists.
+    pub unsafe fn writer_cs<'cs>(
+        &self,
+        cs: Sync::CriticalSection<'cs>,
+    ) -> Writer<'_, T, CAP, Sync, Sync::CriticalSection<'cs>>
     where
-        Sync::CS<'s>: CostlyCriticalSection,
+        Sync: DefineCriticalSectionMethods,
     {
         Writer::new(self, cs)
     }
@@ -106,31 +110,31 @@ impl<T, const CAP: usize, Sync: Synchronization> Buffer<T, CAP, Sync> {
     ///
     /// Safety: the caller must ensure that only a single [`Reader`] pointing to
     /// the same buffer exists.
-    pub const unsafe fn reader(&self) -> Reader<'_, T, CAP, Sync> {
-        Reader::new(self, NoCriticalSection)
+    pub unsafe fn reader(&self) -> Reader<'_, T, CAP, Sync>
+    where
+        Sync: Default,
+    {
+        Reader::new(self, Sync::default())
     }
 
-    /// Get a reading handle to this buffer while in a critical section
-    ///
-    /// This will enable the handle to avoid declaring unnecessary critical
-    /// sections.
+    /// Get a reading handle to this buffer
     ///
     /// Safety: the caller must ensure that only a single [`Reader`] pointing to
     /// the same buffer exists.
-    pub const unsafe fn reader_cs<'b, 's>(
-        &'b self,
-        cs: Sync::CS<'s>,
-    ) -> Reader<'b, T, CAP, Sync, Sync::CS<'s>>
+    pub unsafe fn reader_cs<'cs>(
+        &self,
+        cs: Sync::CriticalSection<'cs>,
+    ) -> Reader<'_, T, CAP, Sync, Sync::CriticalSection<'cs>>
     where
-        Sync::CS<'s>: CostlyCriticalSection,
+        Sync: Default,
     {
         Reader::new(self, cs)
     }
 
-    fn get_head_and_tail<CS: MaybeCriticalSection<Sync>>(&self, cs: &CS) -> (usize, usize) {
-        cs.free(|cs| {
-            let head = Sync::get(cs, &self.head);
-            let tail = Sync::get(cs, &self.tail);
+    fn get_head_and_tail(&self, sync: impl Synchronization<Usize = Sync::Usize>) -> (usize, usize) {
+        sync.free(|cs| {
+            let head = cs.get(&self.head);
+            let tail = cs.get(&self.tail);
 
             (head, tail)
         })

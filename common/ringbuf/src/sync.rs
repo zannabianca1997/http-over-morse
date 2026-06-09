@@ -4,22 +4,24 @@ mod sealed {
     pub trait Sealed {}
 }
 
-pub trait Synchronization: sealed::Sealed {
+/// Syncronization method
+pub trait Synchronization: sealed::Sealed + Copy {
     type Usize: 'static;
-    type CS<'cs>: MaybeCriticalSection<Self>;
-
     const ZERO: Self::Usize;
 
-    fn free<R>(fun: impl FnOnce(Self::CS<'_>) -> R) -> R;
+    type CriticalSection<'cs>: Synchronization<Usize = Self::Usize>;
+    fn free<R>(self, fun: impl FnOnce(Self::CriticalSection<'_>) -> R) -> R;
 
-    fn get(cs: Self::CS<'_>, var: &Self::Usize) -> usize;
-    fn wrapping_add(cs: Self::CS<'_>, var: &Self::Usize, value: usize);
-
+    fn get(self, var: &Self::Usize) -> usize;
+    fn wrapping_add(self, var: &Self::Usize, value: usize);
     fn get_mut(var: &mut Self::Usize) -> &mut usize;
 }
-
-/// Marker trait to mark critical section that have a runtime cost to open
-pub trait CostlyCriticalSection: sealed::Sealed {}
+/// This sinchronization has significant critical sections, so methods to
+/// provide them should be offered
+///
+/// This avoids polluting the API of `crate::Buffer` when a syncronization
+/// without critical sections is used
+pub trait DefineCriticalSectionMethods: Synchronization {}
 
 #[cfg(target_has_atomic = "ptr")]
 mod atomics;
@@ -29,24 +31,10 @@ pub use atomics::Atomics;
 #[cfg(feature = "avr-device")]
 mod critical_sections;
 #[cfg(feature = "avr-device")]
-pub use critical_sections::CriticalSections;
+pub use critical_sections::ShortCriticalSections;
 
 pub type DefaultSynchronization = cfg_select! {
     target_has_atomic = "ptr" => {Atomics}
-    feature = "avr-device" => {CriticalSections}
+    feature = "avr-device" => {ShortCriticalSections}
     _ => { compile_error!("No synchronization method available") }
 };
-
-pub trait MaybeCriticalSection<Sync: Synchronization + ?Sized>: Copy {
-    fn free<R>(self, fun: impl FnOnce(Sync::CS<'_>) -> R) -> R;
-}
-
-/// This writer does not have a critical section
-#[derive(Debug, Clone, Copy, Default)]
-pub struct NoCriticalSection;
-
-impl<Sync: Synchronization> MaybeCriticalSection<Sync> for NoCriticalSection {
-    fn free<R>(self, fun: impl FnOnce(Sync::CS<'_>) -> R) -> R {
-        Sync::free(fun)
-    }
-}

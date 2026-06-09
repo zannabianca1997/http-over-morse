@@ -2,7 +2,7 @@ use core::convert::Infallible;
 
 use ringbuf::{
     Buffer, ReadRegion, Reader, WriteRegion, WriteRegionSlot, Writer,
-    sync::{DefaultSynchronization, MaybeCriticalSection, Synchronization},
+    sync::{DefaultSynchronization, Synchronization},
 };
 
 use crate::{
@@ -26,7 +26,7 @@ impl<Inner, T, const CAP: usize, Sync: Synchronization> Buffered<Inner, T, CAP, 
     }
 }
 
-impl<Inner, const CAP: usize, Sync: Synchronization> BufferStream
+impl<Inner, const CAP: usize, Sync: Synchronization + Default> BufferStream
     for Buffered<Inner, Inner::Item, CAP, Sync>
 where
     Inner: Stream,
@@ -54,7 +54,7 @@ where
     }
 }
 
-impl<Inner, const CAP: usize, Sync: Synchronization> BufferSink
+impl<Inner, const CAP: usize, Sync: Synchronization + Default> BufferSink
     for Buffered<Inner, Inner::Item, CAP, Sync>
 where
     Inner: Sink,
@@ -95,14 +95,14 @@ where
 
 // == Implementations on the `ringbuf` types ==
 
-impl<T, const CAP: usize, S, CS> BufferStream for Reader<'_, T, CAP, S, CS>
+impl<T, const CAP: usize, BS, S> BufferStream for Reader<'_, T, CAP, BS, S>
 where
-    S: Synchronization,
-    CS: MaybeCriticalSection<S>,
+    BS:Synchronization,
+    S: Synchronization<Usize = BS::Usize>
 {
     type Item = T;
     type Err = Infallible;
-    type Ready<'s> = ReadRegion<'s, T, S, CS>;
+    type Ready<'s> = ReadRegion<'s, T, S>;
 
     fn with_ready<R, F>(&mut self, fun: F) -> Result<R, Self::Err>
     where
@@ -112,10 +112,9 @@ where
     }
 }
 
-impl<T, S, CS> Ready for ReadRegion<'_, T, S, CS>
+impl<T, S> Ready for ReadRegion<'_, T, S>
 where
-    S: Synchronization,
-    CS: MaybeCriticalSection<S>,
+    S: Synchronization
 {
     type Item = T;
 
@@ -128,14 +127,14 @@ where
     }
 }
 
-impl<T, const CAP: usize, S, CS> BufferSink for Writer<'_, T, CAP, S, CS>
+impl<T, const CAP: usize, BS, S> BufferSink for Writer<'_, T, CAP, BS, S>
 where
-    S: Synchronization,
-    CS: MaybeCriticalSection<S>,
+    BS:Synchronization,
+    S: Synchronization<Usize = BS::Usize>
 {
     type Item = T;
     type Err = Infallible;
-    type Slots<'s> = WriteRegion<'s, T, S, CS>;
+    type Slots<'s> = WriteRegion<'s, T, S>;
 
     fn with_slots<R>(
         &mut self,
@@ -154,10 +153,9 @@ where
     }
 }
 
-impl<'b, T, S, CS> Slots for WriteRegion<'b, T, S, CS>
+impl<'b, T, S> Slots for WriteRegion<'b, T, S>
 where
     S: Synchronization,
-    CS: MaybeCriticalSection<S>,
 {
     type Item = T;
 

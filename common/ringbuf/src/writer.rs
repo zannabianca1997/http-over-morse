@@ -2,7 +2,7 @@ use core::{cmp::min, mem::MaybeUninit, slice};
 
 use crate::{
     Buffer, WriteRegion,
-    sync::{DefaultSynchronization, MaybeCriticalSection, NoCriticalSection, Synchronization},
+    sync::{DefaultSynchronization, Synchronization},
 };
 
 /// Writable view into a buffer
@@ -13,19 +13,23 @@ pub struct Writer<
     'b,
     T,
     const CAP: usize,
-    Sync: Synchronization = DefaultSynchronization,
-    CS = NoCriticalSection,
+    BufferSync: Synchronization = DefaultSynchronization,
+    Sync: Synchronization<Usize = BufferSync::Usize> = BufferSync,
 > {
-    buffer: &'b Buffer<T, CAP, Sync>,
-    cs: CS,
+    buffer: &'b Buffer<T, CAP, BufferSync>,
+    sync: Sync,
 }
 
-impl<'b, T, const CAP: usize, Sync: Synchronization, CS> Writer<'b, T, CAP, Sync, CS>
-where
-    CS: MaybeCriticalSection<Sync>,
+impl<
+    'b,
+    T,
+    const CAP: usize,
+    BufferSync: Synchronization,
+    Sync: Synchronization<Usize = BufferSync::Usize>,
+> Writer<'b, T, CAP, BufferSync, Sync>
 {
-    pub(crate) const fn new(buffer: &'b Buffer<T, CAP, Sync>, cs: CS) -> Self {
-        Self { buffer, cs }
+    pub(crate) const fn new(buffer: &'b Buffer<T, CAP, BufferSync>, sync: Sync) -> Self {
+        Self { buffer, sync }
     }
 
     /// Return the amount of empty space currently available in the buffer.
@@ -52,7 +56,7 @@ where
     /// region is dropped.
     ///
     /// The returned region will be empty only if the buffer is full.
-    pub fn write<R>(&mut self, fun: impl FnOnce(&mut WriteRegion<'_, T, Sync, CS>) -> R) -> R {
+    pub fn write<R>(&mut self, fun: impl FnOnce(&mut WriteRegion<'_, T, Sync>) -> R) -> R {
         let (start, len) = self.fetch_start_and_len_contiguous();
 
         // Pointer to the start of the buffer
@@ -76,7 +80,7 @@ where
             slice::from_raw_parts_mut(start, len)
         };
 
-        let mut region = WriteRegion::new(region, &self.buffer.tail, self.cs);
+        let mut region = WriteRegion::new(region, &self.buffer.tail, self.sync);
 
         let res = fun(&mut region);
 
@@ -88,7 +92,7 @@ where
 
     /// Start and end of the uninitialized part
     fn fetch_start_and_end(&self) -> (usize, usize) {
-        let (head, tail) = self.buffer.get_head_and_tail(&self.cs);
+        let (head, tail) = self.buffer.get_head_and_tail(self.sync);
 
         let start = tail;
         let end = head.wrapping_add(CAP);
