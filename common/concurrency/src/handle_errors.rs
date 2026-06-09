@@ -1,6 +1,6 @@
 use core::convert::Infallible;
 
-use crate::{process::Process, sink::Sink, stream::Stream};
+use crate::{process::Process, ready::Ready, sink::Sink, slots::Slots, stream::Stream};
 
 pub struct HandleErrors<I, H> {
     pub inner: I,
@@ -24,69 +24,49 @@ where
     }
 }
 
-impl<I, H> Stream for HandleErrors<I, H>
+impl<P, H> Stream for HandleErrors<P, H>
 where
-    I: Stream,
-    H: FnMut(I::Err),
+    P: Stream,
+    H: FnMut(P::Err),
 {
     type Err = Infallible;
-    type Item = I::Item;
-    type Ready = I::Ready;
 
-    fn ready(&mut self) -> nb::Result<Self::Ready, Self::Err> {
+    type Item = P::Item;
+
+    fn fill<S>(&mut self, slots: &mut S) -> nb::Result<(), Self::Err>
+    where
+        S: Slots<Item = Self::Item>,
+    {
         loop {
-            match self.inner.ready() {
-                Ok(r) => return Ok(r),
+            match self.inner.fill(slots) {
+                Ok(()) => return Ok(()),
                 Err(nb::Error::WouldBlock) => return Err(nb::Error::WouldBlock),
                 Err(nb::Error::Other(err)) => (self.handler)(err),
-            }
-        }
-    }
-
-    fn stream(&mut self, ready: &mut Self::Ready) -> Result<Option<Self::Item>, Self::Err> {
-        loop {
-            match self.inner.stream(ready) {
-                Ok(r) => return Ok(r),
-                Err(err) => (self.handler)(err),
             }
         }
     }
 }
 
-impl<I, H> Sink for HandleErrors<I, H>
+impl<P, H> Sink for HandleErrors<P, H>
 where
-    I: Sink,
-    H: FnMut(I::Err),
+    P: Sink,
+    H: FnMut(P::Err),
 {
     type Err = Infallible;
 
-    type Item = I::Item;
+    type Item = P::Item;
 
-    type Slots = I::Slots;
-
-    type Slot = I::Slot;
-
-    fn slots(&mut self) -> nb::Result<Self::Slots, Self::Err> {
+    fn sink<R>(&mut self, items: &mut R) -> nb::Result<(), Self::Err>
+    where
+        R: Ready<Item = Self::Item>,
+    {
         loop {
-            match self.inner.slots() {
-                Ok(r) => return Ok(r),
+            match self.inner.sink(items) {
+                Ok(()) => return Ok(()),
                 Err(nb::Error::WouldBlock) => return Err(nb::Error::WouldBlock),
                 Err(nb::Error::Other(err)) => (self.handler)(err),
             }
         }
-    }
-
-    fn slot(&mut self, slots: &mut Self::Slots) -> Result<Option<Self::Slot>, Self::Err> {
-        loop {
-            match self.inner.slot(slots) {
-                Ok(r) => return Ok(r),
-                Err(err) => (self.handler)(err),
-            }
-        }
-    }
-
-    fn sink(&mut self, slot: Self::Slot, item: Self::Item) {
-        self.inner.sink(slot, item)
     }
 
     fn flush(&mut self) -> nb::Result<(), Self::Err> {

@@ -2,33 +2,79 @@
 //!
 //! Basis of push-based concurrency
 
-use crate::{handle_errors::HandleErrors, process::pipe::Pipe, stream::Stream};
+use crate::{
+    handle_errors::HandleErrors,
+    process::pipe::Pipe,
+    ready::Ready,
+    slots::{Slot, Slots},
+    stream::{BufferStream, Stream},
+};
 
 /// A sink of items
 pub trait Sink {
     /// Items sunk
     type Item;
-
     /// Error in this stream
     type Err;
 
-    /// Slots for items to be consumed without blocking
-    type Slots;
+    /// Sink all item until blocks
+    fn sink<R>(&mut self, items: &mut R) -> nb::Result<(), Self::Err>
+    where
+        R: Ready<Item = Self::Item>;
 
-    /// Slot for a single item to be consumed
-    type Slot;
-
-    /// Get a non blocking writer of consumed items
-    fn slots(&mut self) -> nb::Result<Self::Slots, Self::Err>;
-
-    /// Get the next slot, if available
-    fn slot(&mut self, slots: &mut Self::Slots) -> Result<Option<Self::Slot>, Self::Err>;
-
-    /// Get the next slot
-    fn sink(&mut self, slot: Self::Slot, item: Self::Item);
-
-    /// Flush the sink, ensuring there are no unprocessed values
+    /// Ensure all the item have been sunk
     fn flush(&mut self) -> nb::Result<(), Self::Err>;
+}
+
+pub trait BufferSink {
+    /// Items sunk
+    type Item;
+    /// Error in this stream
+    type Err;
+    /// View into the buffer
+    type Slots<'s>: Slots<Item = Self::Item>;
+
+    /// Slots that can be sunk without blocking
+    fn with_slots<R>(
+        &mut self,
+        fun: impl FnOnce(&mut Self::Slots<'_>) -> R,
+    ) -> Result<R, Self::Err>;
+
+    /// Ensure all the item have been sunk
+    fn flush(&mut self) -> nb::Result<(), Self::Err>;
+}
+
+impl<T> Sink for T
+where
+    T: BufferSink,
+{
+    type Item = T::Item;
+
+    type Err = T::Err;
+
+    /// Sink all item until blocks
+    fn sink<R>(&mut self, items: &mut R) -> nb::Result<(), Self::Err>
+    where
+        R: Ready<Item = Self::Item>,
+    {
+        self.with_slots(|slots| {
+            while let Some(slot) = slots.slot()
+                && let Some(item) = items.pop()
+            {
+                slot.fill(item);
+            }
+
+            if slots.is_empty() {
+                Err(nb::Error::WouldBlock)
+            } else {
+                Ok(())
+            }
+        })?
+    }
+
+    fn flush(&mut self) -> nb::Result<(), Self::Err> {
+        BufferSink::flush(self)
+    }
 }
 
 pub mod bottomless;
@@ -36,19 +82,28 @@ pub mod bottomless;
 impl<T: Sink> SinkExt for T {}
 pub trait SinkExt: Sink {
     /// Stream items into this sink
-    fn stream<S>(self, stream: S) -> Pipe<S, Self>
+    fn stream_from_buffered<S>(self, stream: S) -> Pipe<S, Self, true>
     where
         Self: Sized,
-        S: Stream<Item = Self::Item>,
+        S: BufferStream<Item = Self::Item>,
     {
-        Pipe { stream, sink: self }
+        Pipe::new(stream, self)
+    }
+
+    /// Stream items into this buffered sink
+    fn stream<S>(self, stream: S) -> Pipe<S, Self, false>
+    where
+        Self: Sized + BufferSink,
+        S: Stream<Item = <Self as Sink>::Item>,
+    {
+        Pipe::new(stream, self)
     }
 
     /// Handle the errors incoming
     fn handle_errors<H>(self, handler: H) -> HandleErrors<Self, H>
     where
-        Self: Sized,
         H: FnMut(Self::Err),
+        Self: Sized,
     {
         HandleErrors {
             inner: self,

@@ -2,7 +2,10 @@
 
 use core::{convert::Infallible, marker::PhantomData};
 
-use super::Sink;
+use crate::{
+    sink::BufferSink,
+    slots::{Slot, Slots},
+};
 
 /// Infinite sink
 pub struct Bottomless<I>(PhantomData<I>);
@@ -13,27 +16,45 @@ impl<I> Bottomless<I> {
     }
 }
 
-impl<I> Sink for Bottomless<I> {
+impl<I> BufferSink for Bottomless<I> {
     type Item = I;
     type Err = Infallible;
+    type Slots<'s> = Self;
 
-    type Slots = ();
-    type Slot = ();
-
-    fn slots(&mut self) -> nb::Result<Self::Slots, Self::Err> {
-        Ok(())
-    }
-
-    fn slot(&mut self, (): &mut Self::Slots) -> Result<Option<Self::Slot>, Self::Err> {
-        Ok(Some(()))
-    }
-
-    fn sink(&mut self, (): Self::Slot, item: I) {
-        drop(item)
+    fn with_slots<R>(
+        &mut self,
+        fun: impl FnOnce(&mut Self::Slots<'_>) -> R,
+    ) -> Result<R, Self::Err> {
+        Ok(fun(self))
     }
 
     fn flush(&mut self) -> nb::Result<(), Self::Err> {
         Ok(())
+    }
+}
+
+impl<I> Slots for Bottomless<I> {
+    type Item = I;
+
+    type Slot<'s>
+        = Self
+    where
+        Self: 's;
+
+    fn slot(&mut self) -> Option<Self::Slot<'_>> {
+        Some(*self)
+    }
+
+    fn is_empty(&self) -> bool {
+        false
+    }
+}
+
+impl<I> Slot for Bottomless<I> {
+    type Item = I;
+
+    fn fill(self, item: Self::Item) {
+        drop(item);
     }
 }
 

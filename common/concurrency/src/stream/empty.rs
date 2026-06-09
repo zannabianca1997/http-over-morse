@@ -2,7 +2,7 @@
 
 use core::{convert::Infallible, marker::PhantomData};
 
-use super::Stream;
+use crate::{ready::Ready, stream::BufferStream};
 
 /// Empty stream
 pub struct Empty<I>(PhantomData<I>);
@@ -13,34 +13,31 @@ impl<I> Empty<I> {
     }
 }
 
-impl<I> Stream for Empty<I> {
+impl<I> BufferStream for Empty<I> {
     type Item = I;
     type Err = Infallible;
 
-    type Ready = NoItems;
+    type Ready<'s> = NoneReady<I>;
 
-    fn ready(&mut self) -> nb::Result<Self::Ready, Self::Err> {
-        nb::Result::Err(nb::Error::WouldBlock)
-    }
-
-    fn stream(&mut self, ready: &mut Self::Ready) -> Result<Option<Self::Item>, Self::Err> {
-        match *ready {}
-    }
-}
-
-/// There are never ready items
-pub enum NoItems {}
-
-impl<I> Default for Empty<I> {
-    fn default() -> Self {
-        Self::new()
+    fn with_ready<R, F>(&mut self, fun: F) -> Result<R, Self::Err>
+    where
+        F: FnOnce(&mut Self::Ready<'_>) -> R,
+    {
+        Ok(fun(&mut NoneReady { _item: PhantomData }))
     }
 }
 
-impl<I> Clone for Empty<I> {
-    fn clone(&self) -> Self {
-        Self::new()
+pub struct NoneReady<I> {
+    _item: PhantomData<fn() -> I>,
+}
+impl<I> Ready for NoneReady<I> {
+    type Item = I;
+
+    fn peek(&self) -> Option<&Self::Item> {
+        None
+    }
+
+    fn pop(&mut self) -> Option<Self::Item> {
+        None
     }
 }
-
-impl<I> Copy for Empty<I> {}

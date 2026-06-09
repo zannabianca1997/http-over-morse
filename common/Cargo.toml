@@ -8,6 +8,7 @@ license = "MIT"
 
 [workspace.dependencies]
 concurrency = { path = "concurrency" }
+ringbuf = { path = "ringbuf" }
 
 # General purpose
 
