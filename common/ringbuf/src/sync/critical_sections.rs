@@ -4,7 +4,7 @@ use core::cell::Cell;
 
 use avr_device::interrupt::{CriticalSection, Mutex, free};
 
-use crate::sync::{DefineCriticalSectionMethods, StaticSyncronization};
+use crate::{StaticDefault, sync::DefineCriticalSectionMethods};
 
 use super::{Synchronization, sealed::Sealed};
 
@@ -34,7 +34,7 @@ impl Synchronization for ShortCriticalSections {
         free(fun)
     }
 }
-impl StaticSyncronization for ShortCriticalSections {
+impl StaticDefault for ShortCriticalSections {
     const DEFAULT: Self = ShortCriticalSections;
 }
 impl DefineCriticalSectionMethods for ShortCriticalSections {}

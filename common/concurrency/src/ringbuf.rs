@@ -1,8 +1,8 @@
 use core::convert::Infallible;
 
 use ringbuf::{
-    Buffer, ReadRegion, Reader, WriteRegion, WriteRegionSlot, Writer,
-    sync::{DefaultSynchronization, StaticSyncronization, Synchronization},
+    Buffer, ReadRegion, Reader, StaticDefault, WriteRegion, WriteRegionSlot, Writer,
+    sync::{DefaultSynchronization, Synchronization},
 };
 
 use crate::{
@@ -12,13 +12,12 @@ use crate::{
     stream::{BufferStream, Stream},
 };
 
-pub struct Buffered<Inner, T, const CAP: usize, Sync: StaticSyncronization = DefaultSynchronization>
-{
+pub struct Buffered<Inner, T, const CAP: usize, Sync: Synchronization = DefaultSynchronization> {
     inner: Inner,
     buffer: Buffer<T, CAP, Sync>,
 }
 
-impl<Inner, T, const CAP: usize, Sync: StaticSyncronization> Buffered<Inner, T, CAP, Sync> {
+impl<Inner, T, const CAP: usize, Sync: Synchronization> Buffered<Inner, T, CAP, Sync> {
     pub fn new(inner: Inner) -> Self {
         Self {
             inner,
@@ -27,7 +26,7 @@ impl<Inner, T, const CAP: usize, Sync: StaticSyncronization> Buffered<Inner, T, 
     }
 }
 
-impl<Inner, const CAP: usize, Sync: StaticSyncronization> BufferStream
+impl<Inner, const CAP: usize, Sync: Synchronization + StaticDefault> BufferStream
     for Buffered<Inner, Inner::Item, CAP, Sync>
 where
     Inner: Stream,
@@ -55,7 +54,7 @@ where
     }
 }
 
-impl<Inner, const CAP: usize, Sync: StaticSyncronization> BufferSink
+impl<Inner, const CAP: usize, Sync: Synchronization + StaticDefault> BufferSink
     for Buffered<Inner, Inner::Item, CAP, Sync>
 where
     Inner: Sink,
@@ -98,7 +97,7 @@ where
 
 impl<T, const CAP: usize, BS, S> BufferStream for Reader<'_, T, CAP, BS, S>
 where
-    BS: StaticSyncronization,
+    BS: Synchronization,
     S: Synchronization<Usize = BS::Usize>,
 {
     type Item = T;
@@ -130,7 +129,7 @@ where
 
 impl<T, const CAP: usize, BS, S> BufferSink for Writer<'_, T, CAP, BS, S>
 where
-    BS: StaticSyncronization,
+    BS: Synchronization,
     S: Synchronization<Usize = BS::Usize>,
 {
     type Item = T;

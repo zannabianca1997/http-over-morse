@@ -7,6 +7,8 @@
     "portb",
     "portc",
     "portd",
-    "Baudrate"
+    "Baudrate",
+    "Uninit",
+    "ringbuf"
   ]
 }

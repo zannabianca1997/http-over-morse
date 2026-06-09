@@ -2,7 +2,7 @@ use core::{cmp::min, marker::PhantomData, mem::MaybeUninit, slice};
 
 use crate::{
     Buffer, WriteRegion,
-    sync::{DefaultSynchronization, StaticSyncronization, Synchronization},
+    sync::{DefaultSynchronization, Synchronization},
 };
 
 /// Writable view into a buffer
@@ -13,7 +13,7 @@ pub struct Writer<
     'b,
     T,
     const CAP: usize,
-    BufferSync: StaticSyncronization = DefaultSynchronization,
+    BufferSync: Synchronization = DefaultSynchronization,
     Sync = BufferSync,
 > {
     buffer: &'b Buffer<T, CAP, BufferSync>,
@@ -22,19 +22,23 @@ pub struct Writer<
     ///
     /// Otherwise someone can cast a Writer of `&'static T` to one of `&'a T`
     // TODO: can we make the writer covariant in `&'b fn(T)`? should be sound...
-    _phantom: PhantomData<fn(T)>
+    _phantom: PhantomData<fn(T)>,
 }
 
 impl<
     'b,
     T,
     const CAP: usize,
-    BufferSync: StaticSyncronization,
+    BufferSync: Synchronization,
     Sync: Synchronization<Usize = BufferSync::Usize>,
 > Writer<'b, T, CAP, BufferSync, Sync>
 {
     pub(crate) const fn new(buffer: &'b Buffer<T, CAP, BufferSync>, sync: Sync) -> Self {
-        Self { buffer, sync, _phantom:PhantomData }
+        Self {
+            buffer,
+            sync,
+            _phantom: PhantomData,
+        }
     }
 
     /// Return the amount of empty space currently available in the buffer.

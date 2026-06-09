@@ -4,7 +4,7 @@ mod sealed {
     pub trait Sealed {}
 }
 
-/// Syncronization method
+/// Synchronization method
 pub trait Synchronization: sealed::Sealed + Copy {
     type Usize: 'static;
     const ZERO: Self::Usize;
@@ -16,13 +16,10 @@ pub trait Synchronization: sealed::Sealed + Copy {
     fn wrapping_add(self, var: &Self::Usize, value: usize);
     fn get_mut(var: &mut Self::Usize) -> &mut usize;
 }
-pub trait StaticSyncronization: Synchronization + 'static {
-    const DEFAULT: Self;
-}
-/// This sinchronization has significant critical sections, so methods to
+/// This synchronization has significant critical sections, so methods to
 /// provide them should be offered
 ///
-/// This avoids polluting the API of `crate::Buffer` when a syncronization
+/// This avoids polluting the API of `crate::Buffer` when a synchronization
 /// without critical sections is used
 pub trait DefineCriticalSectionMethods: Synchronization {}
 

@@ -4,7 +4,7 @@ use core::{cmp::min, marker::PhantomData, mem::MaybeUninit, slice};
 
 use crate::{
     Buffer, ReadRegion,
-    sync::{DefaultSynchronization, StaticSyncronization, Synchronization},
+    sync::{DefaultSynchronization, Synchronization},
 };
 
 /// Readable view into a buffer
@@ -15,7 +15,7 @@ pub struct Reader<
     'b,
     T,
     const CAP: usize,
-    BufferSync: StaticSyncronization = DefaultSynchronization,
+    BufferSync: Synchronization = DefaultSynchronization,
     Sync = BufferSync,
 > {
     buffer: &'b Buffer<T, CAP, BufferSync>,
@@ -24,19 +24,23 @@ pub struct Reader<
     ///
     /// Otherwise someone can cast a Reader of `&'a T` to one of `&'static T`
     // TODO: can we make the reader covariant in `&'b T`? should be sound...
-    _phantom: PhantomData<fn() -> T>
+    _phantom: PhantomData<fn() -> T>,
 }
 
 impl<
     'b,
     T,
     const CAP: usize,
-    BufferSync: StaticSyncronization,
+    BufferSync: Synchronization,
     Sync: Synchronization<Usize = BufferSync::Usize>,
 > Reader<'b, T, CAP, BufferSync, Sync>
 {
     pub(crate) const fn new(buffer: &'b Buffer<T, CAP, BufferSync>, sync: Sync) -> Self {
-        Self { buffer, sync, _phantom:PhantomData }
+        Self {
+            buffer,
+            sync,
+            _phantom: PhantomData,
+        }
     }
 
     /// Return the amount of filled space currently available in the buffer.

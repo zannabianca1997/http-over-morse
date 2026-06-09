@@ -5,7 +5,7 @@ use core::sync::atomic::{
     Ordering::{Acquire, Release},
 };
 
-use crate::sync::StaticSyncronization;
+use crate::StaticDefault;
 
 use super::{Synchronization, sealed::Sealed};
 
@@ -42,6 +42,6 @@ impl Synchronization for Atomics {
         fun(Atomics)
     }
 }
-impl StaticSyncronization for Atomics {
+impl StaticDefault for Atomics {
     const DEFAULT: Self = Atomics;
 }
