@@ -42,7 +42,7 @@ where
     pub fn push(&mut self, item: T) -> Result<(), T> {
         // TODO: this is so much simpler that what this chain invokes. Check it
         // is being correctly optimized
-        self.write(|r| r.push(item))
+        self.write(|r| r.push(item).map(|_| ()))
     }
 
     /// Obtain a region to write

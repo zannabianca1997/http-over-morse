@@ -1,24 +1,27 @@
 //! Contiguous views into buffers
 
-use core::mem::MaybeUninit;
+use core::{marker::PhantomData, mem::MaybeUninit, ptr::NonNull};
 
 use crate::sync::{
     DefaultSynchronization, MaybeCriticalSection, NoCriticalSection, Synchronization,
 };
 
 /// A contiguous view in a buffer
-struct Region<
+struct RawRegion<
     'o,
-    T,
     Sync: Synchronization = DefaultSynchronization,
     CS: MaybeCriticalSection<Sync> = NoCriticalSection,
 > {
+    /// Slice of the buffer this region has unique use of
+    ///
+    /// Stored as a type erased pointer to select variance after
+    region: NonNull<()>,
+    /// Lenght of the region
+    len: usize,
     /// Length of the region at its creation
     ///
     /// The region only ever shrinks from the front
     original_len: usize,
-    /// Slice of the buffer this region has unique use of
-    region: &'o mut [MaybeUninit<T>],
     /// Head or tail of the buffer, the one set to the start of the region
     start_index_storage: &'o Sync::Usize,
     /// Possible critical section in which this region is used, to avoid
@@ -26,22 +29,29 @@ struct Region<
     cs: CS,
 }
 
-impl<'o, T, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> Region<'o, T, Sync, CS> {
-    fn new(region: &'o mut [MaybeUninit<T>], start_index_storage: &'o Sync::Usize, cs: CS) -> Self {
+impl<'o, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> RawRegion<'o, Sync, CS> {
+    fn new<T>(
+        region: &'o mut [MaybeUninit<T>],
+        start_index_storage: &'o Sync::Usize,
+        cs: CS,
+    ) -> Self {
+        let len = region.len();
+        let region = NonNull::from_mut(region).cast();
         Self {
-            original_len: region.len(),
+            original_len: len,
             region,
+            len,
             start_index_storage,
             cs,
         }
     }
 
     fn len(&self) -> usize {
-        self.region.len()
+        self.len
     }
 
     fn is_empty(&self) -> bool {
-        self.region.is_empty()
+        self.len == 0
     }
 }
 
@@ -63,13 +73,11 @@ impl<'o, T, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> Region<'o, T,
 //
 // Avoiding this looks impossible without runtime overhead... so we just never
 // give the caller an owned [`Region`]
-impl<'o, T, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> Drop
-    for Region<'o, T, Sync, CS>
-{
+impl<'o, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> Drop for RawRegion<'o, Sync, CS> {
     fn drop(&mut self) {
         // The region only shrinks from the front, so the number of slots read
         // or written is the difference between the original and current length.
-        let used = self.original_len - self.region.len();
+        let used = self.original_len - self.len;
         // Update the start of the region in the buffer
         self.cs
             .free(|cs| Sync::wrapping_add(cs, self.start_index_storage, used))
@@ -81,7 +89,10 @@ pub struct ReadRegion<
     T,
     Sync: Synchronization = DefaultSynchronization,
     CS: MaybeCriticalSection<Sync> = NoCriticalSection,
->(Region<'o, T, Sync, CS>);
+> {
+    raw: RawRegion<'o, Sync, CS>,
+    _phantom: PhantomData<T>,
+}
 
 impl<'b, T, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> ReadRegion<'b, T, Sync, CS> {
     pub(crate) fn new(
@@ -89,27 +100,56 @@ impl<'b, T, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> ReadRegion<'b
         start_index_storage: &'b Sync::Usize,
         cs: CS,
     ) -> Self {
-        Self(Region::new(region, start_index_storage, cs))
+        Self {
+            raw: RawRegion::new(region, start_index_storage, cs),
+            _phantom: PhantomData,
+        }
     }
 
     /// Remove an element from the region
     pub fn pop(&mut self) -> Option<T> {
         // Take out a value, updating the slice
-        let value = self.0.region.split_off_first_mut()?;
+        if self.raw.len() == 0 {
+            return None;
+        }
+
+        let region: NonNull<T> = self.raw.region.cast();
+
+        self.raw.len -= 1;
+        self.raw.region = unsafe {
+            // Safety: len ensures the memory is from the right allocation
+            region.add(1)
+        }
+        .cast();
 
         Some(unsafe {
             // Safety: ReadRegion can only be created by a reader, that ensures
-            // it is pointing to fully initialized memory
-            value.assume_init_read()
+            // it is pointing to fully initialized memory. The type is covariant
+            // in `T`, meaning `T` might be a supertype now -> safe to return a
+            // subtype
+            region.read()
         })
     }
 
+    /// Current length of the region
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.raw.len()
     }
 
+    /// Is the region empty
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.raw.is_empty()
+    }
+
+    /// Get a view to the region elements
+    pub fn as_slice(&self) -> &[T] {
+        unsafe {
+            // Safety: ReadRegion can only be created by a reader, that ensures
+            // it is pointing to fully initialized memory. The type is covariant
+            // in `T`, meaning `T` might be a supertype now -> safe to return a
+            // subtype
+            NonNull::slice_from_raw_parts(self.raw.region.cast(), self.raw.len).as_ref()
+        }
     }
 }
 
@@ -118,7 +158,10 @@ pub struct WriteRegion<
     T,
     Sync: Synchronization = DefaultSynchronization,
     CS: MaybeCriticalSection<Sync> = NoCriticalSection,
->(Region<'o, T, Sync, CS>);
+> {
+    raw: RawRegion<'o, Sync, CS>,
+    _phantom: PhantomData<fn(T)>,
+}
 
 impl<'o, T, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> WriteRegion<'o, T, Sync, CS> {
     pub(crate) fn new(
@@ -126,27 +169,59 @@ impl<'o, T, Sync: Synchronization, CS: MaybeCriticalSection<Sync>> WriteRegion<'
         start_index_storage: &'o Sync::Usize,
         cs: CS,
     ) -> Self {
-        Self(Region::new(region, start_index_storage, cs))
+        Self {
+            raw: RawRegion::new(region, start_index_storage, cs),
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Get a slot in the region
+    pub fn slot(&mut self) -> Option<WriteRegionSlot<'_, T>> {
+        if self.raw.is_empty() {
+            return None;
+        } else {
+            return Some(WriteRegionSlot(
+                &mut self.raw.region,
+                &mut self.raw.len,
+                PhantomData,
+            ));
+        }
     }
 
     /// Add an element into the region
     pub fn push(&mut self, item: T) -> Result<(), T> {
-        // Take a slot, updating the slice
-        let Some(value) = self.0.region.split_off_first_mut() else {
-            return Err(item);
-        };
-
-        value.write(item);
-
-        Ok(())
+        match self.slot() {
+            Some(slot) => Ok(slot.fill(item)),
+            None => Err(item),
+        }
     }
 
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.raw.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.raw.is_empty()
+    }
+}
+
+pub struct WriteRegionSlot<'o, T>(&'o mut NonNull<()>, &'o mut usize, PhantomData<fn(T)>);
+
+impl<'o, T> WriteRegionSlot<'o, T> {
+    pub fn fill(self, value: T) {
+        let t: NonNull<MaybeUninit<T>> = self.0.cast();
+        unsafe {
+            // Safety: we know the pointer is valid due to the lenght check and
+            // the region creation invariants. Plus we know the memory is uninit
+            // - so we do not forget any valid value
+            t.write(MaybeUninit::new(value))
+        };
+        *self.0 = unsafe {
+            // Safety: lenght check ensure this is in the slice
+            t.add(1)
+        }
+        .cast();
+        *self.1 -= 1;
     }
 }
 

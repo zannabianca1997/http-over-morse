@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 avr-device = { version = "0.8.1", optional = true }
+nunny.workspace = true
 
 [features]
 default = ["atmega328p"]

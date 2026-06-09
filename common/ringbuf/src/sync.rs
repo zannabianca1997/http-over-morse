@@ -5,7 +5,7 @@ mod sealed {
 }
 
 pub trait Synchronization: sealed::Sealed {
-    type Usize;
+    type Usize: 'static;
     type CS<'cs>: MaybeCriticalSection<Self>;
 
     const ZERO: Self::Usize;

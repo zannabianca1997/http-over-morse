@@ -9,7 +9,7 @@ use core::{cell::UnsafeCell, mem::MaybeUninit};
 use sync::{MaybeCriticalSection, NoCriticalSection, Synchronization};
 
 pub use reader::Reader;
-pub use region::{ReadRegion, WriteRegion};
+pub use region::{ReadRegion, WriteRegion, WriteRegionSlot};
 pub use writer::Writer;
 
 use crate::sync::CostlyCriticalSection;
