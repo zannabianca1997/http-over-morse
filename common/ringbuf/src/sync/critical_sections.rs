@@ -4,7 +4,10 @@ use core::cell::Cell;
 
 use avr_device::interrupt::{CriticalSection, Mutex, free};
 
-use crate::{StaticDefault, sync::DefineCriticalSectionMethods};
+use crate::{
+    ConstDefault, ConstZero,
+    sync::{DefineCriticalSectionMethods, ProvidesIndices},
+};
 
 use super::{Synchronization, sealed::Sealed};
 
@@ -12,10 +15,14 @@ use super::{Synchronization, sealed::Sealed};
 #[derive(Default, Clone, Copy)]
 pub struct ShortCriticalSections;
 impl Sealed for ShortCriticalSections {}
-impl Synchronization for ShortCriticalSections {
+impl ProvidesIndices for ShortCriticalSections {
     type Usize = Mutex<Cell<usize>>;
-    const ZERO: Self::Usize = Mutex::new(Cell::new(0));
 
+    fn get_mut(var: &mut Self::Usize) -> &mut usize {
+        var.get_mut().get_mut()
+    }
+}
+impl Synchronization for ShortCriticalSections {
     fn get(self, var: &Self::Usize) -> usize {
         free(|cs| var.borrow(cs).get())
     }
@@ -24,27 +31,30 @@ impl Synchronization for ShortCriticalSections {
         free(|cs| var.borrow(cs).update(|t| t.wrapping_add(value)))
     }
 
-    fn get_mut(var: &mut Self::Usize) -> &mut usize {
-        var.get_mut().get_mut()
-    }
-
     type CriticalSection<'cs> = CriticalSection<'cs>;
 
     fn free<R>(self, fun: impl FnOnce(Self::CriticalSection<'_>) -> R) -> R {
         free(fun)
     }
 }
-impl StaticDefault for ShortCriticalSections {
+impl ConstDefault for ShortCriticalSections {
     const DEFAULT: Self = ShortCriticalSections;
 }
+impl ConstZero for Mutex<Cell<usize>> {
+    const ZERO: Self = Mutex::new(Cell::new(0));
+}
+
 impl DefineCriticalSectionMethods for ShortCriticalSections {}
 
 /// Syncronization in a critical section
 impl Sealed for CriticalSection<'_> {}
-impl Synchronization for CriticalSection<'_> {
+impl ProvidesIndices for CriticalSection<'_> {
     type Usize = Mutex<Cell<usize>>;
-    const ZERO: Self::Usize = Mutex::new(Cell::new(0));
-
+    fn get_mut(var: &mut Self::Usize) -> &mut usize {
+        var.get_mut().get_mut()
+    }
+}
+impl Synchronization for CriticalSection<'_> {
     type CriticalSection<'cs> = CriticalSection<'cs>;
 
     fn free<R>(self, fun: impl FnOnce(Self::CriticalSection<'_>) -> R) -> R {
@@ -57,9 +67,5 @@ impl Synchronization for CriticalSection<'_> {
 
     fn wrapping_add(self, var: &Self::Usize, value: usize) {
         var.borrow(self).update(|t| t.wrapping_add(value))
-    }
-
-    fn get_mut(var: &mut Self::Usize) -> &mut usize {
-        var.get_mut().get_mut()
     }
 }

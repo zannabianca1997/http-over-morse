@@ -1,8 +1,11 @@
 use core::convert::Infallible;
 
 use ringbuf::{
-    Buffer, ReadRegion, Reader, StaticDefault, WriteRegion, WriteRegionSlot, Writer,
-    sync::{DefaultSynchronization, Synchronization},
+    Buffer, ConstDefault,
+    sync::{
+        DefaultSynchronization, ReadRegion, Reader, Synchronization, WriteRegion, WriteRegionSlot,
+        Writer,
+    },
 };
 
 use crate::{
@@ -26,7 +29,7 @@ impl<Inner, T, const CAP: usize, Sync: Synchronization> Buffered<Inner, T, CAP, 
     }
 }
 
-impl<Inner, const CAP: usize, Sync: Synchronization + StaticDefault> BufferStream
+impl<Inner, const CAP: usize, Sync: Synchronization + ConstDefault> BufferStream
     for Buffered<Inner, Inner::Item, CAP, Sync>
 where
     Inner: Stream,
@@ -54,7 +57,7 @@ where
     }
 }
 
-impl<Inner, const CAP: usize, Sync: Synchronization + StaticDefault> BufferSink
+impl<Inner, const CAP: usize, Sync: Synchronization + ConstDefault> BufferSink
     for Buffered<Inner, Inner::Item, CAP, Sync>
 where
     Inner: Sink,

@@ -3,8 +3,8 @@
 use core::{cmp::min, marker::PhantomData, mem::MaybeUninit, slice};
 
 use crate::{
-    Buffer, ReadRegion,
-    sync::{DefaultSynchronization, Synchronization},
+    Buffer,
+    sync::{DefaultSynchronization, ProvidesIndices, ReadRegion, Synchronization},
 };
 
 /// Readable view into a buffer
@@ -15,7 +15,7 @@ pub struct Reader<
     'b,
     T,
     const CAP: usize,
-    BufferSync: Synchronization = DefaultSynchronization,
+    BufferSync: ProvidesIndices = DefaultSynchronization,
     Sync = BufferSync,
 > {
     buffer: &'b Buffer<T, CAP, BufferSync>,
@@ -31,11 +31,11 @@ impl<
     'b,
     T,
     const CAP: usize,
-    BufferSync: Synchronization,
+    BufferSync: ProvidesIndices,
     Sync: Synchronization<Usize = BufferSync::Usize>,
 > Reader<'b, T, CAP, BufferSync, Sync>
 {
-    pub(crate) const fn new(buffer: &'b Buffer<T, CAP, BufferSync>, sync: Sync) -> Self {
+    pub(in crate::sync) const fn new(buffer: &'b Buffer<T, CAP, BufferSync>, sync: Sync) -> Self {
         Self {
             buffer,
             sync,

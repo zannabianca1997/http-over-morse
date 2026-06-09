@@ -82,7 +82,7 @@ pub struct ReadRegion<'o, T, Sync: Synchronization = DefaultSynchronization> {
 }
 
 impl<'o, T, Sync: Synchronization> ReadRegion<'o, T, Sync> {
-    pub(crate) fn new(
+    pub(in crate::sync) fn new(
         region: &'o mut [MaybeUninit<T>],
         start_index_storage: &'o Sync::Usize,
         sync: Sync,
@@ -146,7 +146,7 @@ pub struct WriteRegion<'o, T, Sync: Synchronization = DefaultSynchronization> {
 }
 
 impl<'o, T, Sync: Synchronization> WriteRegion<'o, T, Sync> {
-    pub(crate) fn new(
+    pub(in crate::sync) fn new(
         region: &'o mut [MaybeUninit<T>],
         start_index_storage: &'o Sync::Usize,
         sync: Sync,

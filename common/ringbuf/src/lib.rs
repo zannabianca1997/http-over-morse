@@ -6,23 +6,13 @@ extern crate std;
 
 use core::{cell::UnsafeCell, mem::MaybeUninit};
 
-use sync::Synchronization;
-
-pub use reader::Reader;
-pub use region::{ReadRegion, WriteRegion, WriteRegionSlot};
-pub use writer::Writer;
-
-use crate::sync::DefineCriticalSectionMethods;
-
-mod reader;
-mod region;
 pub mod sync;
-mod writer;
+pub mod unsync;
 
 /// A ring buffer for type T and with capacity CAP
 ///
 /// The only way of interacting with this is through [`Writer`] and [`Reader`]
-pub struct Buffer<T, const CAP: usize, Sync: Synchronization> {
+pub struct Buffer<T, const CAP: usize, Sync: ProvidesIndices> {
     /// Content of the buffer
     ///
     /// All the elements from `head % CAP` included onward, possibly wrapping
@@ -42,7 +32,7 @@ pub struct Buffer<T, const CAP: usize, Sync: Synchronization> {
     tail: Sync::Usize,
 }
 
-impl<T, const CAP: usize, Sync: Synchronization> Buffer<T, CAP, Sync> {
+impl<T, const CAP: usize, Sync: ProvidesIndices> Buffer<T, CAP, Sync> {
     pub const fn new() -> Self {
         // Force a compile-time failure if the buffer length is not a power of
         // 2.
@@ -61,83 +51,9 @@ impl<T, const CAP: usize, Sync: Synchronization> Buffer<T, CAP, Sync> {
                 // Safety: An array of MaybeUninit has no requirements
                 MaybeUninit::uninit().assume_init()
             }),
-            head: Sync::ZERO,
-            tail: Sync::ZERO,
+            head: <Sync::Usize as ConstZero>::ZERO,
+            tail: <Sync::Usize as ConstZero>::ZERO,
         }
-    }
-
-    /// Get both handlers to the buffer.
-    ///
-    /// Ensure uniqueness by taking a mutable reference
-    pub const fn split(&mut self) -> (Writer<'_, T, CAP, Sync>, Reader<'_, T, CAP, Sync>)
-    where
-        Sync: StaticDefault,
-    {
-        (
-            Writer::new(self, Sync::DEFAULT),
-            Reader::new(self, Sync::DEFAULT),
-        )
-    }
-
-    /// Get a writing handle to this buffer
-    ///
-    /// Safety: the caller must ensure that only a single [`Writer`] pointing to
-    /// the same buffer exists.
-    pub const unsafe fn writer(&self) -> Writer<'_, T, CAP, Sync>
-    where
-        Sync: StaticDefault,
-    {
-        Writer::new(self, Sync::DEFAULT)
-    }
-
-    /// Get a writing handle to this buffer inside a critical section.
-    ///
-    /// This will avoid declaring unneeded critical sections.
-    ///
-    /// Safety: the caller must ensure that only a single [`Writer`] pointing to
-    /// the same buffer exists.
-    pub const unsafe fn writer_cs<'cs>(
-        &self,
-        cs: Sync::CriticalSection<'cs>,
-    ) -> Writer<'_, T, CAP, Sync, Sync::CriticalSection<'cs>>
-    where
-        Sync: DefineCriticalSectionMethods,
-    {
-        Writer::new(self, cs)
-    }
-
-    /// Get a reading handle to this buffer
-    ///
-    /// Safety: the caller must ensure that only a single [`Reader`] pointing to
-    /// the same buffer exists.
-    pub const unsafe fn reader(&self) -> Reader<'_, T, CAP, Sync>
-    where
-        Sync: StaticDefault,
-    {
-        Reader::new(self, Sync::DEFAULT)
-    }
-
-    /// Get a reading handle to this buffer
-    ///
-    /// Safety: the caller must ensure that only a single [`Reader`] pointing to
-    /// the same buffer exists.
-    pub const unsafe fn reader_cs<'cs>(
-        &self,
-        cs: Sync::CriticalSection<'cs>,
-    ) -> Reader<'_, T, CAP, Sync, Sync::CriticalSection<'cs>>
-    where
-        Sync: DefineCriticalSectionMethods,
-    {
-        Reader::new(self, cs)
-    }
-
-    fn get_head_and_tail(&self, sync: impl Synchronization<Usize = Sync::Usize>) -> (usize, usize) {
-        sync.free(|cs| {
-            let head = cs.get(&self.head);
-            let tail = cs.get(&self.tail);
-
-            (head, tail)
-        })
     }
 }
 
@@ -147,10 +63,10 @@ impl<T, const CAP: usize, Sync: Synchronization> Buffer<T, CAP, Sync> {
 /// them already [`Sync`]. The content is not sync, but both the writer and the
 /// reader check they have exclusive access to it before interacting. Finally, T
 /// must be [`Send`] as we can read it out from another thread.
-unsafe impl<T, const CAP: usize, S: Synchronization> Sync for Buffer<T, CAP, S> where T: Send {}
+unsafe impl<T, const CAP: usize, S: ProvidesIndices> Sync for Buffer<T, CAP, S> where T: Send {}
 
 /// Need to drop all elements still in the buffer
-impl<T, const CAP: usize, Sync: Synchronization> Drop for Buffer<T, CAP, Sync> {
+impl<T, const CAP: usize, Sync: ProvidesIndices> Drop for Buffer<T, CAP, Sync> {
     fn drop(&mut self) {
         let head = Sync::get_mut(&mut self.head);
         let tail = Sync::get_mut(&mut self.tail);
@@ -168,8 +84,19 @@ impl<T, const CAP: usize, Sync: Synchronization> Drop for Buffer<T, CAP, Sync> {
     }
 }
 
-pub trait StaticDefault {
+pub trait ProvidesIndices {
+    type Usize: ConstZero + 'static;
+    fn get_mut(var: &mut Self::Usize) -> &mut usize;
+}
+
+/// Const version of the default trait
+pub trait ConstDefault {
     const DEFAULT: Self;
+}
+
+/// Const trait returning the zero of a type
+pub trait ConstZero {
+    const ZERO: Self;
 }
 
 #[cfg(test)]
