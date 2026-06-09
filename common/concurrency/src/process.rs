@@ -1,6 +1,6 @@
 use core::convert::Infallible;
 
-use crate::handle_errors::HandleErrors;
+use crate::{handle_errors::HandleErrors, process::join::Join};
 
 /// A ongoing process
 pub trait Process {
@@ -38,5 +38,15 @@ pub trait ProcessExt: Process {
             inner: self,
             handler,
         }
+    }
+
+    /// Merge this and another process in a single one that runs both
+    /// concurrently
+    fn join<Other>(self, other: Other) -> Join<Self, Other>
+    where
+        Self: Sized,
+        Other: Process,
+    {
+        Join(self, other)
     }
 }
