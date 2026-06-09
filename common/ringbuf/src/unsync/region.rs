@@ -145,3 +145,48 @@ impl<'o, T> WriteRegionSlot<'o, T> {
         *self.1 -= 1;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::unsync::Buffer;
+
+    #[test]
+    fn partial_read_advances_by_popped_count() {
+        let mut buf = Buffer::<i32, 8>::new();
+        let mut w = buf.writer_mut();
+        for i in 0..5 {
+            w.push(i).unwrap();
+        }
+        drop(w);
+
+        let mut r = buf.reader_mut();
+        r.read(|region| {
+            assert_eq!(region.len(), 5);
+            assert!(!region.is_empty());
+            assert_eq!(region.pop(), Some(0));
+            assert_eq!(region.pop(), Some(1));
+        });
+
+        assert_eq!(r.available(), 3);
+        assert_eq!(r.pop(), Some(2));
+    }
+
+    #[test]
+    fn partial_write_advances_by_pushed_count() {
+        let mut buf = Buffer::<i32, 8>::new();
+
+        let mut w = buf.writer_mut();
+        w.write(|region| {
+            assert_eq!(region.len(), 8);
+            region.push(10).unwrap();
+            region.push(11).unwrap();
+        });
+        drop(w);
+
+        let mut r = buf.reader_mut();
+        assert_eq!(r.available(), 2);
+        assert_eq!(r.pop(), Some(10));
+        assert_eq!(r.pop(), Some(11));
+        assert_eq!(r.pop(), None);
+    }
+}

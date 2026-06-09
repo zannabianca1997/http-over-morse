@@ -33,9 +33,13 @@ impl<'b, T, const CAP: usize, Sync: ProvidesIndices> Reader<'b, T, CAP, Sync> {
 
         let buffer = self.buffer.content.get().cast::<MaybeUninit<T>>();
 
-        let start = unsafe { buffer.add(start & (CAP - 1)) };
+        let start = unsafe {
+            buffer.add(start & (CAP - 1))
+        };
 
-        let region = unsafe { slice::from_raw_parts_mut(start, len) };
+        let region = unsafe {
+            slice::from_raw_parts_mut(start, len)
+        };
 
         let head = Sync::get_mut(&mut self.buffer.head);
         let mut region = ReadRegion::new(region, head);
@@ -64,5 +68,55 @@ impl<'b, T, const CAP: usize, Sync: ProvidesIndices> Reader<'b, T, CAP, Sync> {
         let init_non_wrapping_len = min(non_wrapping_len, init_len);
 
         (start, init_non_wrapping_len)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::unsync::Buffer;
+
+    #[test]
+    fn read_region_empty_only_when_empty() {
+        let mut buf = Buffer::<i32, 4>::new();
+        let mut r = buf.reader_mut();
+
+        assert!(r.read(|reg| reg.is_empty()));
+        drop(r);
+
+        let mut w = buf.writer_mut();
+        w.push(7).unwrap();
+        drop(w);
+
+        let mut r = buf.reader_mut();
+        assert!(!r.read(|reg| reg.is_empty()));
+    }
+
+    #[test]
+    fn read_region_truncates_at_wrap() {
+        let mut buf = Buffer::<i32, 4>::new();
+        let mut w = buf.writer_mut();
+        for i in 0..4 {
+            w.push(i).unwrap();
+        }
+        drop(w);
+
+        let mut r = buf.reader_mut();
+        assert_eq!(r.pop(), Some(0));
+        assert_eq!(r.pop(), Some(1));
+        drop(r);
+
+        let mut w = buf.writer_mut();
+        w.push(4).unwrap();
+        w.push(5).unwrap();
+        drop(w);
+
+        let mut r = buf.reader_mut();
+        assert_eq!(r.read(|reg| reg.len()), 2);
+
+        assert_eq!(r.pop(), Some(2));
+        assert_eq!(r.pop(), Some(3));
+        assert_eq!(r.pop(), Some(4));
+        assert_eq!(r.pop(), Some(5));
+        assert_eq!(r.pop(), None);
     }
 }

@@ -288,3 +288,140 @@ mod tests {
         });
     }
 }
+
+#[cfg(test)]
+mod tests_unsync {
+    use crate::unsync::Buffer;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering::SeqCst},
+    };
+
+    #[derive(Debug)]
+    struct DropCounter(Arc<AtomicUsize>);
+    impl Drop for DropCounter {
+        fn drop(&mut self) {
+            self.0.fetch_add(1, SeqCst);
+        }
+    }
+
+    #[test]
+    fn fifo_roundtrip() {
+        let mut buf = Buffer::<i32, 4>::new();
+        let mut w = buf.writer_mut();
+
+        assert_eq!(w.push(1), Ok(()));
+        assert_eq!(w.push(2), Ok(()));
+        assert_eq!(w.push(3), Ok(()));
+        drop(w);
+
+        let mut r = buf.reader_mut();
+        assert_eq!(r.pop(), Some(1));
+        assert_eq!(r.pop(), Some(2));
+        assert_eq!(r.pop(), Some(3));
+        assert_eq!(r.pop(), None);
+    }
+
+    #[test]
+    fn fills_and_reports_full() {
+        let mut buf = Buffer::<i32, 4>::new();
+        let mut w = buf.writer_mut();
+
+        assert_eq!(w.available(), 4);
+        for i in 0..4 {
+            assert_eq!(w.push(i), Ok(()));
+        }
+        assert_eq!(w.available(), 0);
+        assert_eq!(w.push(99), Err(99));
+        drop(w);
+
+        let mut r = buf.reader_mut();
+        assert_eq!(r.available(), 4);
+        assert_eq!(r.pop(), Some(0));
+        drop(r);
+
+        let mut w = buf.writer_mut();
+        assert_eq!(w.available(), 1);
+    }
+
+    #[test]
+    fn wraps_around() {
+        let mut buf = Buffer::<i32, 4>::new();
+
+        let mut next_push = 0;
+        let mut next_pop = 0;
+        for _ in 0..1000 {
+            let mut w = buf.writer_mut();
+            while w.available() > 2 {
+                w.push(next_push).unwrap();
+                next_push += 1;
+            }
+            drop(w);
+
+            let mut r = buf.reader_mut();
+            for _ in 0..2 {
+                if let Some(v) = r.pop() {
+                    assert_eq!(v, next_pop);
+                    next_pop += 1;
+                }
+            }
+            drop(r);
+        }
+
+        let mut r = buf.reader_mut();
+        while let Some(v) = r.pop() {
+            assert_eq!(v, next_pop);
+            next_pop += 1;
+        }
+        assert_eq!(next_pop, next_push);
+    }
+
+    #[test]
+    fn buffer_drop_is_exact() {
+        let counter = Arc::new(AtomicUsize::new(0));
+        {
+            let mut buf = Buffer::<DropCounter, 4>::new();
+            let mut w = buf.writer_mut();
+            for _ in 0..3 {
+                w.push(DropCounter(counter.clone())).unwrap();
+            }
+            drop(w);
+            assert_eq!(counter.load(SeqCst), 0);
+        }
+        assert_eq!(counter.load(SeqCst), 3);
+    }
+
+    #[test]
+    fn pop_then_buffer_drop_is_exact() {
+        let counter = Arc::new(AtomicUsize::new(0));
+        {
+            let mut buf = Buffer::<DropCounter, 4>::new();
+            let mut w = buf.writer_mut();
+            for _ in 0..4 {
+                w.push(DropCounter(counter.clone())).unwrap();
+            }
+            drop(w);
+
+            let mut r = buf.reader_mut();
+            drop(r.pop());
+            drop(r.pop());
+            drop(r);
+            assert_eq!(counter.load(SeqCst), 2);
+        }
+        assert_eq!(counter.load(SeqCst), 4);
+    }
+
+    #[test]
+    fn zst_makes_progress() {
+        let mut buf = Buffer::<(), 4>::new();
+        let mut w = buf.writer_mut();
+
+        assert_eq!(w.push(()), Ok(()));
+        drop(w);
+
+        let mut r = buf.reader_mut();
+        assert_eq!(r.available(), 1);
+        assert_eq!(r.pop(), Some(()));
+        assert_eq!(r.pop(), None);
+    }
+}

@@ -31,9 +31,13 @@ impl<'b, T, const CAP: usize, Sync: ProvidesIndices> Writer<'b, T, CAP, Sync> {
 
         let buffer = self.buffer.content.get().cast::<MaybeUninit<T>>();
 
-        let start = unsafe { buffer.add(start & (CAP - 1)) };
+        let start = unsafe {
+            buffer.add(start & (CAP - 1))
+        };
 
-        let region = unsafe { slice::from_raw_parts_mut(start, len) };
+        let region = unsafe {
+            slice::from_raw_parts_mut(start, len)
+        };
 
         let tail = Sync::get_mut(&mut self.buffer.tail);
         let mut region = WriteRegion::new(region, tail);
@@ -62,5 +66,40 @@ impl<'b, T, const CAP: usize, Sync: ProvidesIndices> Writer<'b, T, CAP, Sync> {
         let uninit_non_wrapping_len = min(non_wrapping_len, uninit_len);
 
         (start, uninit_non_wrapping_len)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::unsync::Buffer;
+
+    #[test]
+    fn write_region_empty_only_when_full() {
+        let mut buf = Buffer::<i32, 4>::new();
+        let mut w = buf.writer_mut();
+
+        assert!(!w.write(|reg| reg.is_empty()));
+        for i in 0..4 {
+            w.push(i).unwrap();
+        }
+        assert!(w.write(|reg| reg.is_empty()));
+    }
+
+    #[test]
+    fn write_region_truncates_at_wrap() {
+        let mut buf = Buffer::<i32, 4>::new();
+        let mut w = buf.writer_mut();
+        for i in 0..3 {
+            w.push(i).unwrap();
+        }
+        drop(w);
+
+        let mut r = buf.reader_mut();
+        assert_eq!(r.pop(), Some(0));
+        drop(r);
+
+        let mut w = buf.writer_mut();
+        assert_eq!(w.write(|reg| reg.len()), 1);
+        assert_eq!(w.available(), 2);
     }
 }
