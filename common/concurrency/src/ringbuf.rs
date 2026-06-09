@@ -12,7 +12,8 @@ use crate::{
     stream::{BufferStream, Stream},
 };
 
-pub struct Buffered<Inner, T, const CAP: usize, Sync: StaticSyncronization = DefaultSynchronization> {
+pub struct Buffered<Inner, T, const CAP: usize, Sync: StaticSyncronization = DefaultSynchronization>
+{
     inner: Inner,
     buffer: Buffer<T, CAP, Sync>,
 }
@@ -97,8 +98,8 @@ where
 
 impl<T, const CAP: usize, BS, S> BufferStream for Reader<'_, T, CAP, BS, S>
 where
-    BS:StaticSyncronization,
-    S: Synchronization<Usize = BS::Usize>
+    BS: StaticSyncronization,
+    S: Synchronization<Usize = BS::Usize>,
 {
     type Item = T;
     type Err = Infallible;
@@ -114,7 +115,7 @@ where
 
 impl<T, S> Ready for ReadRegion<'_, T, S>
 where
-    S: Synchronization
+    S: Synchronization,
 {
     type Item = T;
 
@@ -129,8 +130,8 @@ where
 
 impl<T, const CAP: usize, BS, S> BufferSink for Writer<'_, T, CAP, BS, S>
 where
-    BS:StaticSyncronization,
-    S: Synchronization<Usize = BS::Usize>
+    BS: StaticSyncronization,
+    S: Synchronization<Usize = BS::Usize>,
 {
     type Item = T;
     type Err = Infallible;

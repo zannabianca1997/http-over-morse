@@ -1,6 +1,6 @@
 //! Reader in a buffer
 
-use core::{cmp::min, mem::MaybeUninit, slice};
+use core::{cmp::min, marker::PhantomData, mem::MaybeUninit, slice};
 
 use crate::{
     Buffer, ReadRegion,
@@ -20,6 +20,11 @@ pub struct Reader<
 > {
     buffer: &'b Buffer<T, CAP, BufferSync>,
     sync: Sync,
+    /// Ensure at least covariance in T
+    ///
+    /// Otherwise someone can cast a Reader of `&'a T` to one of `&'static T`
+    // TODO: can we make the reader covariant in `&'b T`? should be sound...
+    _phantom: PhantomData<fn() -> T>
 }
 
 impl<
@@ -31,7 +36,7 @@ impl<
 > Reader<'b, T, CAP, BufferSync, Sync>
 {
     pub(crate) const fn new(buffer: &'b Buffer<T, CAP, BufferSync>, sync: Sync) -> Self {
-        Self { buffer, sync }
+        Self { buffer, sync, _phantom:PhantomData }
     }
 
     /// Return the amount of filled space currently available in the buffer.

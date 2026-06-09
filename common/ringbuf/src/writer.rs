@@ -1,4 +1,4 @@
-use core::{cmp::min, mem::MaybeUninit, slice};
+use core::{cmp::min, marker::PhantomData, mem::MaybeUninit, slice};
 
 use crate::{
     Buffer, WriteRegion,
@@ -18,6 +18,11 @@ pub struct Writer<
 > {
     buffer: &'b Buffer<T, CAP, BufferSync>,
     sync: Sync,
+    /// Ensure at least contravariance in T
+    ///
+    /// Otherwise someone can cast a Writer of `&'static T` to one of `&'a T`
+    // TODO: can we make the writer covariant in `&'b fn(T)`? should be sound...
+    _phantom: PhantomData<fn(T)>
 }
 
 impl<
@@ -29,7 +34,7 @@ impl<
 > Writer<'b, T, CAP, BufferSync, Sync>
 {
     pub(crate) const fn new(buffer: &'b Buffer<T, CAP, BufferSync>, sync: Sync) -> Self {
-        Self { buffer, sync }
+        Self { buffer, sync, _phantom:PhantomData }
     }
 
     /// Return the amount of empty space currently available in the buffer.
