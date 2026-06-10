@@ -2,7 +2,10 @@
 
 use core::convert::Infallible;
 
-use ringbuf::sync::{ReadRegion, Reader, Synchronization, WriteRegion, WriteRegionSlot, Writer};
+use ringbuf::{
+    indices::SyncIndex,
+    sync::{ReadRegion, Reader, Synchronization, WriteRegion, WriteRegionSlot, Writer},
+};
 
 use crate::{
     ready::Ready,
@@ -11,14 +14,12 @@ use crate::{
     stream::BufferStream,
 };
 
-impl<T, const CAP: usize, BS, S> BufferStream for Reader<'_, T, CAP, BS, S>
-where
-    BS: Synchronization,
-    S: Synchronization<Index = BS::Index>,
+impl<T, const CAP: usize, Idx: SyncIndex, Sync: Synchronization<Idx>> BufferStream
+    for Reader<'_, T, CAP, Idx, Sync>
 {
     type Item = T;
     type Err = Infallible;
-    type Ready<'s> = ReadRegion<'s, T, S>;
+    type Ready<'s> = ReadRegion<'s, T, Idx, Sync>;
 
     fn with_ready<R, F>(&mut self, fun: F) -> Result<R, Self::Err>
     where
@@ -28,10 +29,7 @@ where
     }
 }
 
-impl<T, S> Ready for ReadRegion<'_, T, S>
-where
-    S: Synchronization,
-{
+impl<T, Idx: SyncIndex, Sync: Synchronization<Idx>> Ready for ReadRegion<'_, T, Idx, Sync> {
     type Item = T;
 
     fn pop(&mut self) -> Option<Self::Item> {
@@ -43,14 +41,12 @@ where
     }
 }
 
-impl<T, const CAP: usize, BS, S> BufferSink for Writer<'_, T, CAP, BS, S>
-where
-    BS: Synchronization,
-    S: Synchronization<Index = BS::Index>,
+impl<T, const CAP: usize, Idx: SyncIndex, Sync: Synchronization<Idx>> BufferSink
+    for Writer<'_, T, CAP, Idx, Sync>
 {
     type Item = T;
     type Err = Infallible;
-    type Slots<'s> = WriteRegion<'s, T, S>;
+    type Slots<'s> = WriteRegion<'s, T, Idx, Sync>;
 
     fn with_slots<R>(
         &mut self,
@@ -69,10 +65,7 @@ where
     }
 }
 
-impl<'b, T, S> Slots for WriteRegion<'b, T, S>
-where
-    S: Synchronization,
-{
+impl<'b, T, Idx: SyncIndex, Sync: Synchronization<Idx>> Slots for WriteRegion<'b, T, Idx, Sync> {
     type Item = T;
 
     type Slot<'r>

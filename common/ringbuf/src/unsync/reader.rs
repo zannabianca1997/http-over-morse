@@ -28,7 +28,7 @@ impl<'b, T, const CAP: usize, Idx: Index> Reader<'b, T, CAP, Idx> {
         self.read(|r| r.pop())
     }
 
-    pub fn read<R>(&mut self, fun: impl FnOnce(&mut ReadRegion<'_, T>) -> R) -> R {
+    pub fn read<R>(&mut self, fun: impl FnOnce(&mut ReadRegion<'_, T, Idx>) -> R) -> R {
         let (start, len) = self.fetch_start_and_len_contiguous();
 
         let buffer = self.buffer.content.get().cast::<MaybeUninit<T>>();
@@ -37,8 +37,7 @@ impl<'b, T, const CAP: usize, Idx: Index> Reader<'b, T, CAP, Idx> {
 
         let region = unsafe { slice::from_raw_parts_mut(start, len) };
 
-        let head = Index::get_mut(&mut self.buffer.head);
-        let mut region = ReadRegion::new(region, head);
+        let mut region = ReadRegion::new(region, &mut self.buffer.head);
 
         let res = fun(&mut region);
 
@@ -47,8 +46,12 @@ impl<'b, T, const CAP: usize, Idx: Index> Reader<'b, T, CAP, Idx> {
         res
     }
 
+    /// Safety: call only with a mutable borrow to the buffer
     fn fetch_start_and_end(&self) -> (usize, usize) {
-        let (head, tail) = self.buffer.get_head_and_tail_unsync();
+        let (head, tail) = unsafe {
+            // Safety: we have a &mut in the struct
+            self.buffer.get_head_and_tail_unsync()
+        };
 
         let start = head;
         let end = tail;

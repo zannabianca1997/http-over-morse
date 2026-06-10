@@ -4,9 +4,7 @@ use core::cell::Cell;
 
 use avr_device::interrupt::{CriticalSection, Mutex, free};
 
-use crate::{
-    ConstDefault, Index, indices::SyncIndex, sealed::Sealed, sync::DefineCriticalSectionMethods,
-};
+use crate::{Index, indices::SyncIndex, sealed::Sealed, sync::DefineCriticalSectionMethods};
 
 use super::Synchronization;
 
@@ -29,15 +27,16 @@ impl Synchronization<Mutex<Cell<usize>>> for CriticalSections {
         free(fun)
     }
 }
-impl ConstDefault for CriticalSections {
-    const DEFAULT: Self = CriticalSections;
-}
 
 impl Sealed for Mutex<Cell<usize>> {}
 impl Index for Mutex<Cell<usize>> {
     const ZERO: Self = Mutex::new(Cell::new(0));
-    fn get_mut(&mut self) -> &mut usize {
-        self.get_mut().get_mut()
+    fn get_mut(&mut self) -> usize {
+        *self.get_mut().get_mut()
+    }
+    fn wrapping_add_mut(&mut self, value: usize) {
+        let var = self.get_mut().get_mut();
+        *var = var.wrapping_add(value);
     }
 
     unsafe fn get_unsync(&self) -> usize {
@@ -50,6 +49,7 @@ impl Index for Mutex<Cell<usize>> {
 }
 impl SyncIndex for Mutex<Cell<usize>> {
     type Sync = CriticalSections;
+    const SYNC: Self::Sync = CriticalSections;
 }
 
 impl DefineCriticalSectionMethods for CriticalSections {}

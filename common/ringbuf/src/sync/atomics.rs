@@ -5,7 +5,7 @@ use core::sync::atomic::{
     Ordering::{Acquire, Relaxed, Release},
 };
 
-use crate::{ConstDefault, Index, indices::SyncIndex, sealed::Sealed};
+use crate::{Index, indices::SyncIndex, sealed::Sealed};
 
 use super::Synchronization;
 
@@ -34,15 +34,15 @@ impl Synchronization<AtomicUsize> for Atomics {
         fun(Atomics)
     }
 }
-impl ConstDefault for Atomics {
-    const DEFAULT: Self = Atomics;
-}
 
 impl Sealed for AtomicUsize {}
 impl Index for AtomicUsize {
     const ZERO: Self = AtomicUsize::new(0);
-    fn get_mut(&mut self) -> &mut usize {
-        self.get_mut()
+    fn get_mut(&mut self) -> usize {
+        *self.get_mut()
+    }
+    fn wrapping_add_mut(&mut self, value: usize) {
+        *self.get_mut() = self.get_mut().wrapping_add(value);
     }
 
     unsafe fn get_unsync(&self) -> usize {
@@ -54,4 +54,5 @@ impl Index for AtomicUsize {
 }
 impl SyncIndex for AtomicUsize {
     type Sync = Atomics;
+    const SYNC: Self::Sync = Atomics;
 }

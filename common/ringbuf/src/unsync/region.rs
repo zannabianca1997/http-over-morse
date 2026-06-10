@@ -2,14 +2,16 @@
 
 use core::{marker::PhantomData, mem::MaybeUninit, ptr::NonNull};
 
-struct RawRegion<'o> {
+use crate::indices::Index;
+
+struct RawRegion<'o, Idx> {
     region: NonNull<()>,
     len: usize,
-    start_index_storage: &'o mut usize,
+    start_index_storage: &'o mut Idx,
 }
 
-impl<'o> RawRegion<'o> {
-    fn new<T>(region: &'o mut [MaybeUninit<T>], start_index_storage: &'o mut usize) -> Self {
+impl<'o, Idx> RawRegion<'o, Idx> {
+    fn new<T>(region: &'o mut [MaybeUninit<T>], start_index_storage: &'o mut Idx) -> Self {
         let len = region.len();
         let region = NonNull::from_mut(region).cast();
         Self {
@@ -28,15 +30,15 @@ impl<'o> RawRegion<'o> {
     }
 }
 
-pub struct ReadRegion<'o, T> {
-    raw: RawRegion<'o>,
+pub struct ReadRegion<'o, T, Idx> {
+    raw: RawRegion<'o, Idx>,
     _phantom: PhantomData<T>,
 }
 
-impl<'o, T> ReadRegion<'o, T> {
+impl<'o, T, Idx: Index> ReadRegion<'o, T, Idx> {
     pub(in crate::unsync) fn new(
         region: &'o mut [MaybeUninit<T>],
-        start_index_storage: &'o mut usize,
+        start_index_storage: &'o mut Idx,
     ) -> Self {
         Self {
             raw: RawRegion::new(region, start_index_storage),
@@ -51,7 +53,7 @@ impl<'o, T> ReadRegion<'o, T> {
 
         let region: NonNull<T> = self.raw.region.cast();
 
-        *self.raw.start_index_storage += 1;
+        Idx::wrapping_add_mut(self.raw.start_index_storage, 1);
         self.raw.region = unsafe { region.add(1) }.cast();
 
         Some(unsafe { region.read() })
@@ -70,15 +72,15 @@ impl<'o, T> ReadRegion<'o, T> {
     }
 }
 
-pub struct WriteRegion<'o, T> {
-    raw: RawRegion<'o>,
+pub struct WriteRegion<'o, T, Idx> {
+    raw: RawRegion<'o, Idx>,
     _phantom: PhantomData<fn(T)>,
 }
 
-impl<'o, T> WriteRegion<'o, T> {
+impl<'o, T, Idx: Index> WriteRegion<'o, T, Idx> {
     pub(in crate::unsync) fn new(
         region: &'o mut [MaybeUninit<T>],
-        start_index_storage: &'o mut usize,
+        start_index_storage: &'o mut Idx,
     ) -> Self {
         Self {
             raw: RawRegion::new(region, start_index_storage),
@@ -86,7 +88,7 @@ impl<'o, T> WriteRegion<'o, T> {
         }
     }
 
-    pub fn slot(&mut self) -> Option<WriteRegionSlot<'_, T>> {
+    pub fn slot(&mut self) -> Option<WriteRegionSlot<'_, T, Idx>> {
         if self.raw.is_empty() {
             return None;
         } else {
@@ -114,14 +116,14 @@ impl<'o, T> WriteRegion<'o, T> {
     }
 }
 
-pub struct WriteRegionSlot<'o, T>(&'o mut NonNull<()>, &'o mut usize, PhantomData<fn(T)>);
+pub struct WriteRegionSlot<'o, T, Idx>(&'o mut NonNull<()>, &'o mut Idx, PhantomData<fn(T)>);
 
-impl<'o, T> WriteRegionSlot<'o, T> {
+impl<'o, T, Idx: Index> WriteRegionSlot<'o, T, Idx> {
     pub fn fill(self, value: T) {
         let t: NonNull<MaybeUninit<T>> = self.0.cast();
         unsafe { t.write(MaybeUninit::new(value)) };
         *self.0 = unsafe { t.add(1) }.cast();
-        *self.1 += 1;
+        Index::wrapping_add_mut(self.1, 1);
     }
 }
 

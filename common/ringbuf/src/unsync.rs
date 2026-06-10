@@ -16,12 +16,16 @@ impl Sealed for usize {}
 impl Index for usize {
     const ZERO: Self = 0;
 
-    fn get_mut(&mut self) -> &mut usize {
-        self
+    fn get_mut(&mut self) -> usize {
+        *self
     }
 
     unsafe fn get_unsync(&self) -> usize {
         *self
+    }
+
+    fn wrapping_add_mut(&mut self, value: usize) {
+        *self = self.wrapping_add(value);
     }
 }
 
@@ -38,7 +42,8 @@ impl<T, const CAP: usize, Idx: Index> crate::Buffer<T, CAP, Idx> {
         Reader::new(self)
     }
 
-    fn get_head_and_tail_unsync(&self) -> (usize, usize) {
+    /// Safety: call only with a mutable borrow to the buffer
+    unsafe fn get_head_and_tail_unsync(&self) -> (usize, usize) {
         // Safety: callers (the unsync Reader/Writer) hold this buffer through
         // a mutable borrow, guaranteeing exclusive access.
         unsafe { (Index::get_unsync(&self.head), Index::get_unsync(&self.tail)) }

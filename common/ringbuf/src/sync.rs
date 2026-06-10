@@ -1,10 +1,7 @@
 //! Concurrent access to the buffer through separate smart pointers for writing
 //! and reader
 
-use crate::{
-    ConstDefault,
-    indices::{Index, SyncIndex},
-};
+use crate::indices::{Index, SyncIndex};
 
 pub use reader::Reader;
 pub use region::{ReadRegion, WriteRegion, WriteRegionSlot};
@@ -56,10 +53,7 @@ impl<T, const CAP: usize, Idx: Index + SyncIndex> crate::Buffer<T, CAP, Idx> {
         Writer<'_, T, CAP, Idx, Idx::Sync>,
         Reader<'_, T, CAP, Idx, Idx::Sync>,
     ) {
-        (
-            Writer::new(self, ConstDefault::DEFAULT),
-            Reader::new(self, ConstDefault::DEFAULT),
-        )
+        (Writer::new(self, Idx::SYNC), Reader::new(self, Idx::SYNC))
     }
 
     /// Get a writing handle to this buffer
@@ -67,7 +61,7 @@ impl<T, const CAP: usize, Idx: Index + SyncIndex> crate::Buffer<T, CAP, Idx> {
     /// Safety: the caller must ensure that only a single [`Writer`] pointing to
     /// the same buffer exists.
     pub const unsafe fn writer(&self) -> Writer<'_, T, CAP, Idx, Idx::Sync> {
-        Writer::new(self, ConstDefault::DEFAULT)
+        Writer::new(self, Idx::SYNC)
     }
 
     /// Get a writing handle to this buffer inside a critical section.
@@ -79,7 +73,10 @@ impl<T, const CAP: usize, Idx: Index + SyncIndex> crate::Buffer<T, CAP, Idx> {
     pub const unsafe fn writer_cs<'cs>(
         &self,
         cs: <Idx::Sync as Synchronization<Idx>>::CriticalSection<'cs>,
-    ) -> Writer<'_, T, CAP, Idx, <Idx::Sync as Synchronization<Idx>>::CriticalSection<'cs>> {
+    ) -> Writer<'_, T, CAP, Idx, <Idx::Sync as Synchronization<Idx>>::CriticalSection<'cs>>
+    where
+        Idx::Sync: DefineCriticalSectionMethods,
+    {
         Writer::new(self, cs)
     }
 
@@ -88,7 +85,7 @@ impl<T, const CAP: usize, Idx: Index + SyncIndex> crate::Buffer<T, CAP, Idx> {
     /// Safety: the caller must ensure that only a single [`Reader`] pointing to
     /// the same buffer exists.
     pub const unsafe fn reader(&self) -> Reader<'_, T, CAP, Idx, Idx::Sync> {
-        Reader::new(self, ConstDefault::DEFAULT)
+        Reader::new(self, Idx::SYNC)
     }
 
     /// Get a reading handle to this buffer
@@ -98,7 +95,10 @@ impl<T, const CAP: usize, Idx: Index + SyncIndex> crate::Buffer<T, CAP, Idx> {
     pub const unsafe fn reader_cs<'cs>(
         &self,
         cs: <Idx::Sync as Synchronization<Idx>>::CriticalSection<'cs>,
-    ) -> Reader<'_, T, CAP, Idx, <Idx::Sync as Synchronization<Idx>>::CriticalSection<'cs>> {
+    ) -> Reader<'_, T, CAP, Idx, <Idx::Sync as Synchronization<Idx>>::CriticalSection<'cs>>
+    where
+        Idx::Sync: DefineCriticalSectionMethods,
+    {
         Reader::new(self, cs)
     }
 

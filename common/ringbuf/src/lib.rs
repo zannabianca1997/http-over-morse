@@ -6,7 +6,9 @@ extern crate std;
 
 use core::{cell::UnsafeCell, mem::MaybeUninit};
 
-use crate::indices::Index;
+use indices::Index;
+
+pub mod indices;
 
 pub mod sync;
 pub mod unsync;
@@ -70,10 +72,10 @@ unsafe impl<T, const CAP: usize, Idx: Index> Sync for Buffer<T, CAP, Idx> where 
 /// Need to drop all elements still in the buffer
 impl<T, const CAP: usize, Idx: Index> Drop for Buffer<T, CAP, Idx> {
     fn drop(&mut self) {
-        let head = Index::get_mut(&mut self.head);
+        let mut head = Index::get_mut(&mut self.head);
         let tail = Index::get_mut(&mut self.tail);
         while head != tail {
-            let init = &mut self.content.get_mut()[*head & (CAP - 1)];
+            let init = &mut self.content.get_mut()[head & (CAP - 1)];
 
             unsafe {
                 // Safety: we know all elements between head and tail have been
@@ -81,41 +83,15 @@ impl<T, const CAP: usize, Idx: Index> Drop for Buffer<T, CAP, Idx> {
                 init.assume_init_drop();
             }
 
-            *head = head.wrapping_add(1);
+            head = head.wrapping_add(1);
         }
+        self.head = Idx::ZERO;
+        self.tail = Idx::ZERO;
     }
 }
 
 mod sealed {
     pub trait Sealed {}
-}
-
-/// Const version of the default trait
-pub trait ConstDefault {
-    const DEFAULT: Self;
-}
-
-mod indices {
-    use crate::{ConstDefault, sealed::Sealed, sync::Synchronization};
-
-    /// Const trait returning the zero of a type
-    pub trait Index: 'static + Sealed + Sized {
-        const ZERO: Self;
-        fn get_mut(&mut self) -> &mut usize;
-
-        /// Read the index through a shared reference, without synchronization.
-        ///
-        /// Compiles to a plain load: no atomics ordering, no critical section.
-        ///
-        /// # Safety
-        /// The caller must guarantee exclusive access to the buffer this index
-        /// belongs to (e.g. by holding it through `&mut Buffer`), so that no
-        /// other party can be concurrently mutating the index.
-        unsafe fn get_unsync(&self) -> usize;
-    }
-    pub trait SyncIndex: Index {
-        type Sync: Synchronization<Self> + ConstDefault;
-    }
 }
 
 #[cfg(test)]

@@ -26,7 +26,7 @@ impl<'b, T, const CAP: usize, Idx: Index> Writer<'b, T, CAP, Idx> {
         self.write(|r| r.push(item).map(|_| ()))
     }
 
-    pub fn write<R>(&mut self, fun: impl FnOnce(&mut WriteRegion<'_, T>) -> R) -> R {
+    pub fn write<R>(&mut self, fun: impl FnOnce(&mut WriteRegion<'_, T, Idx>) -> R) -> R {
         let (start, len) = self.fetch_start_and_len_contiguous();
 
         let buffer = self.buffer.content.get().cast::<MaybeUninit<T>>();
@@ -35,8 +35,7 @@ impl<'b, T, const CAP: usize, Idx: Index> Writer<'b, T, CAP, Idx> {
 
         let region = unsafe { slice::from_raw_parts_mut(start, len) };
 
-        let tail = Index::get_mut(&mut self.buffer.tail);
-        let mut region = WriteRegion::new(region, tail);
+        let mut region = WriteRegion::new(region, &mut self.buffer.tail);
 
         let res = fun(&mut region);
 
@@ -46,7 +45,10 @@ impl<'b, T, const CAP: usize, Idx: Index> Writer<'b, T, CAP, Idx> {
     }
 
     fn fetch_start_and_end(&self) -> (usize, usize) {
-        let (head, tail) = self.buffer.get_head_and_tail_unsync();
+        let (head, tail) = unsafe {
+            // Safety: we have a &mut in the struct
+            self.buffer.get_head_and_tail_unsync()
+        };
 
         let start = tail;
         let end = head.wrapping_add(CAP);

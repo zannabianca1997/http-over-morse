@@ -3,7 +3,7 @@
 use core::convert::Infallible;
 
 use ringbuf::{
-    ProvidesIndices,
+    indices::Index,
     unsync::{ReadRegion, Reader, WriteRegion, WriteRegionSlot, Writer},
 };
 
@@ -14,10 +14,10 @@ use crate::{
     stream::BufferStream,
 };
 
-impl<T, const CAP: usize, BS: ProvidesIndices> BufferStream for Reader<'_, T, CAP, BS> {
+impl<T, const CAP: usize, Idx: Index> BufferStream for Reader<'_, T, CAP, Idx> {
     type Item = T;
     type Err = Infallible;
-    type Ready<'s> = ReadRegion<'s, T>;
+    type Ready<'s> = ReadRegion<'s, T, Idx>;
 
     fn with_ready<R, F>(&mut self, fun: F) -> Result<R, Self::Err>
     where
@@ -27,7 +27,7 @@ impl<T, const CAP: usize, BS: ProvidesIndices> BufferStream for Reader<'_, T, CA
     }
 }
 
-impl<T> Ready for ReadRegion<'_, T> {
+impl<T, Idx: Index> Ready for ReadRegion<'_, T, Idx> {
     type Item = T;
 
     fn pop(&mut self) -> Option<Self::Item> {
@@ -39,10 +39,10 @@ impl<T> Ready for ReadRegion<'_, T> {
     }
 }
 
-impl<T, const CAP: usize, BS: ProvidesIndices> BufferSink for Writer<'_, T, CAP, BS> {
+impl<T, const CAP: usize, Idx: Index> BufferSink for Writer<'_, T, CAP, Idx> {
     type Item = T;
     type Err = Infallible;
-    type Slots<'s> = WriteRegion<'s, T>;
+    type Slots<'s> = WriteRegion<'s, T, Idx>;
 
     fn with_slots<R>(
         &mut self,
@@ -61,11 +61,11 @@ impl<T, const CAP: usize, BS: ProvidesIndices> BufferSink for Writer<'_, T, CAP,
     }
 }
 
-impl<'b, T> Slots for WriteRegion<'b, T> {
+impl<'b, T, Idx: Index> Slots for WriteRegion<'b, T, Idx> {
     type Item = T;
 
     type Slot<'r>
-        = WriteRegionSlot<'r, T>
+        = WriteRegionSlot<'r, T, Idx>
     where
         Self: 'r;
 
@@ -78,7 +78,7 @@ impl<'b, T> Slots for WriteRegion<'b, T> {
     }
 }
 
-impl<'r, T> Slot for WriteRegionSlot<'r, T> {
+impl<'r, T, Idx: Index> Slot for WriteRegionSlot<'r, T, Idx> {
     type Item = T;
 
     fn fill(self, item: Self::Item) {
