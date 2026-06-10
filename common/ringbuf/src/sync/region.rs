@@ -2,10 +2,10 @@
 
 use core::{marker::PhantomData, mem::MaybeUninit, ptr::NonNull};
 
-use crate::sync::{DefaultSynchronization, Synchronization};
+use crate::{indices::Index, sync::Synchronization};
 
 /// A contiguous view in a buffer
-struct RawRegion<'o, Sync: Synchronization = DefaultSynchronization> {
+struct RawRegion<'o, Idx: Index, Sync: Synchronization<Idx>> {
     /// Slice of the buffer this region has unique use of
     ///
     /// Stored as a type erased pointer to select variance after
@@ -17,17 +17,13 @@ struct RawRegion<'o, Sync: Synchronization = DefaultSynchronization> {
     /// The region only ever shrinks from the front
     original_len: usize,
     /// Head or tail of the buffer, the one set to the start of the region
-    start_index_storage: &'o Sync::Usize,
+    start_index_storage: &'o Idx,
     /// Syncronization primitive used
     sync: Sync,
 }
 
-impl<'o, Sync: Synchronization> RawRegion<'o, Sync> {
-    fn new<T>(
-        region: &'o mut [MaybeUninit<T>],
-        start_index_storage: &'o Sync::Usize,
-        sync: Sync,
-    ) -> Self {
+impl<'o, Idx: Index, Sync: Synchronization<Idx>> RawRegion<'o, Idx, Sync> {
+    fn new<T>(region: &'o mut [MaybeUninit<T>], start_index_storage: &'o Idx, sync: Sync) -> Self {
         let len = region.len();
         let region = NonNull::from_mut(region).cast();
         Self {
@@ -66,7 +62,7 @@ impl<'o, Sync: Synchronization> RawRegion<'o, Sync> {
 //
 // Avoiding this looks impossible without runtime overhead... so we just never
 // give the caller an owned [`Region`]
-impl<'o, Sync: Synchronization> Drop for RawRegion<'o, Sync> {
+impl<'o, Idx: Index, Sync: Synchronization<Idx>> Drop for RawRegion<'o, Idx, Sync> {
     fn drop(&mut self) {
         // The region only shrinks from the front, so the number of slots read
         // or written is the difference between the original and current length.
@@ -76,15 +72,15 @@ impl<'o, Sync: Synchronization> Drop for RawRegion<'o, Sync> {
     }
 }
 
-pub struct ReadRegion<'o, T, Sync: Synchronization = DefaultSynchronization> {
-    raw: RawRegion<'o, Sync>,
+pub struct ReadRegion<'o, T, Idx: Index, Sync: Synchronization<Idx>> {
+    raw: RawRegion<'o, Idx, Sync>,
     _phantom: PhantomData<T>,
 }
 
-impl<'o, T, Sync: Synchronization> ReadRegion<'o, T, Sync> {
+impl<'o, T, Idx: Index, Sync: Synchronization<Idx>> ReadRegion<'o, T, Idx, Sync> {
     pub(in crate::sync) fn new(
         region: &'o mut [MaybeUninit<T>],
-        start_index_storage: &'o Sync::Usize,
+        start_index_storage: &'o Idx,
         sync: Sync,
     ) -> Self {
         Self {
@@ -140,15 +136,15 @@ impl<'o, T, Sync: Synchronization> ReadRegion<'o, T, Sync> {
     }
 }
 
-pub struct WriteRegion<'o, T, Sync: Synchronization = DefaultSynchronization> {
-    raw: RawRegion<'o, Sync>,
+pub struct WriteRegion<'o, T, Idx: Index, Sync: Synchronization<Idx>> {
+    raw: RawRegion<'o, Idx, Sync>,
     _phantom: PhantomData<fn(T)>,
 }
 
-impl<'o, T, Sync: Synchronization> WriteRegion<'o, T, Sync> {
+impl<'o, T, Idx: Index, Sync: Synchronization<Idx>> WriteRegion<'o, T, Idx, Sync> {
     pub(in crate::sync) fn new(
         region: &'o mut [MaybeUninit<T>],
-        start_index_storage: &'o Sync::Usize,
+        start_index_storage: &'o Idx,
         sync: Sync,
     ) -> Self {
         Self {
@@ -208,15 +204,14 @@ impl<'o, T> WriteRegionSlot<'o, T> {
 }
 
 #[cfg(test)]
-#[cfg(target_has_atomic = "ptr")]
 mod tests {
-    use crate::{Buffer, sync::Atomics};
+    use crate::sync::Buffer;
 
     /// Popping only some of a read region advances `head` by the number
     /// actually popped, not by the region's length.
     #[test]
     fn partial_read_advances_by_popped_count() {
-        let mut buf = Buffer::<i32, 8, Atomics>::new();
+        let mut buf = Buffer::<i32, 8>::new();
         let (mut w, mut r) = buf.split();
         for i in 0..5 {
             w.push(i).unwrap();
@@ -238,7 +233,7 @@ mod tests {
     /// actually pushed.
     #[test]
     fn partial_write_advances_by_pushed_count() {
-        let mut buf = Buffer::<i32, 8, Atomics>::new();
+        let mut buf = Buffer::<i32, 8>::new();
         let (mut w, mut r) = buf.split();
 
         w.write(|region| {

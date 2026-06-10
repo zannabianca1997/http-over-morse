@@ -1,16 +1,16 @@
 use core::{cmp::min, marker::PhantomData, mem::MaybeUninit, slice};
 
-use crate::{Buffer, ProvidesIndices, unsync::Unsync};
+use crate::{Buffer, indices::Index};
 
 use super::WriteRegion;
 
-pub struct Writer<'b, T, const CAP: usize, Sync: ProvidesIndices = Unsync> {
-    buffer: &'b mut Buffer<T, CAP, Sync>,
+pub struct Writer<'b, T, const CAP: usize, Idx: Index> {
+    buffer: &'b mut Buffer<T, CAP, Idx>,
     _phantom: PhantomData<fn(T)>,
 }
 
-impl<'b, T, const CAP: usize, Sync: ProvidesIndices> Writer<'b, T, CAP, Sync> {
-    pub(in crate::unsync) const fn new(buffer: &'b mut Buffer<T, CAP, Sync>) -> Self {
+impl<'b, T, const CAP: usize, Idx: Index> Writer<'b, T, CAP, Idx> {
+    pub(in crate::unsync) const fn new(buffer: &'b mut Buffer<T, CAP, Idx>) -> Self {
         Self {
             buffer,
             _phantom: PhantomData,
@@ -35,7 +35,7 @@ impl<'b, T, const CAP: usize, Sync: ProvidesIndices> Writer<'b, T, CAP, Sync> {
 
         let region = unsafe { slice::from_raw_parts_mut(start, len) };
 
-        let tail = Sync::get_mut(&mut self.buffer.tail);
+        let tail = Index::get_mut(&mut self.buffer.tail);
         let mut region = WriteRegion::new(region, tail);
 
         let res = fun(&mut region);

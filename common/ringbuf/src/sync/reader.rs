@@ -4,21 +4,16 @@ use core::{cmp::min, marker::PhantomData, mem::MaybeUninit, slice};
 
 use crate::{
     Buffer,
-    sync::{DefaultSynchronization, ProvidesIndices, ReadRegion, Synchronization},
+    indices::{Index, SyncIndex},
+    sync::{ReadRegion, Synchronization},
 };
 
 /// Readable view into a buffer
 ///
 /// For this to be safe to interact with, only a single [`Reader`] must exist at
 /// the same time
-pub struct Reader<
-    'b,
-    T,
-    const CAP: usize,
-    BufferSync: ProvidesIndices = DefaultSynchronization,
-    Sync = BufferSync,
-> {
-    buffer: &'b Buffer<T, CAP, BufferSync>,
+pub struct Reader<'b, T, const CAP: usize, Idx: Index, Sync> {
+    buffer: &'b Buffer<T, CAP, Idx>,
     sync: Sync,
     /// Ensure at least covariance in T
     ///
@@ -27,15 +22,10 @@ pub struct Reader<
     _phantom: PhantomData<fn() -> T>,
 }
 
-impl<
-    'b,
-    T,
-    const CAP: usize,
-    BufferSync: ProvidesIndices,
-    Sync: Synchronization<Usize = BufferSync::Usize>,
-> Reader<'b, T, CAP, BufferSync, Sync>
+impl<'b, T, const CAP: usize, Idx: Index + SyncIndex, Sync: Synchronization<Idx>>
+    Reader<'b, T, CAP, Idx, Sync>
 {
-    pub(in crate::sync) const fn new(buffer: &'b Buffer<T, CAP, BufferSync>, sync: Sync) -> Self {
+    pub(in crate::sync) const fn new(buffer: &'b Buffer<T, CAP, Idx>, sync: Sync) -> Self {
         Self {
             buffer,
             sync,
@@ -67,7 +57,7 @@ impl<
     /// is dropped.
     ///
     /// The returned region will be empty only if the buffer itself is empty.
-    pub fn read<R>(&mut self, fun: impl FnOnce(&mut ReadRegion<'_, T, Sync>) -> R) -> R {
+    pub fn read<R>(&mut self, fun: impl FnOnce(&mut ReadRegion<'_, T, Idx, Sync>) -> R) -> R {
         let (start, len) = self.fetch_start_and_len_contiguous();
 
         // Pointer to the start of the buffer
@@ -129,14 +119,13 @@ impl<
 }
 
 #[cfg(test)]
-#[cfg(target_has_atomic = "ptr")]
 mod tests {
-    use crate::{Buffer, sync::Atomics};
+    use crate::sync::Buffer;
 
     /// A read region is empty exactly when the buffer is empty.
     #[test]
     fn read_region_empty_only_when_empty() {
-        let mut buf = Buffer::<i32, 4, Atomics>::new();
+        let mut buf = Buffer::<i32, 4>::new();
         let (mut w, mut r) = buf.split();
 
         assert!(r.read(|reg| reg.is_empty()));
@@ -148,7 +137,7 @@ mod tests {
     /// truncated at the wrap boundary (it does not span the seam).
     #[test]
     fn read_region_truncates_at_wrap() {
-        let mut buf = Buffer::<i32, 4, Atomics>::new();
+        let mut buf = Buffer::<i32, 4>::new();
         let (mut w, mut r) = buf.split();
 
         for i in 0..4 {

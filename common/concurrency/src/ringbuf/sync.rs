@@ -14,7 +14,7 @@ use crate::{
 impl<T, const CAP: usize, BS, S> BufferStream for Reader<'_, T, CAP, BS, S>
 where
     BS: Synchronization,
-    S: Synchronization<Usize = BS::Usize>,
+    S: Synchronization<Index = BS::Index>,
 {
     type Item = T;
     type Err = Infallible;
@@ -46,7 +46,7 @@ where
 impl<T, const CAP: usize, BS, S> BufferSink for Writer<'_, T, CAP, BS, S>
 where
     BS: Synchronization,
-    S: Synchronization<Usize = BS::Usize>,
+    S: Synchronization<Index = BS::Index>,
 {
     type Item = T;
     type Err = Infallible;

@@ -2,17 +2,17 @@
 
 use core::{cmp::min, marker::PhantomData, mem::MaybeUninit, slice};
 
-use crate::{Buffer, ProvidesIndices, unsync::Unsync};
+use crate::{Buffer, indices::Index};
 
 use super::ReadRegion;
 
-pub struct Reader<'b, T, const CAP: usize, Sync: ProvidesIndices = Unsync> {
-    buffer: &'b mut Buffer<T, CAP, Sync>,
+pub struct Reader<'b, T, const CAP: usize, Idx: Index> {
+    buffer: &'b mut Buffer<T, CAP, Idx>,
     _phantom: PhantomData<fn() -> T>,
 }
 
-impl<'b, T, const CAP: usize, Sync: ProvidesIndices> Reader<'b, T, CAP, Sync> {
-    pub(in crate::unsync) const fn new(buffer: &'b mut Buffer<T, CAP, Sync>) -> Self {
+impl<'b, T, const CAP: usize, Idx: Index> Reader<'b, T, CAP, Idx> {
+    pub(in crate::unsync) const fn new(buffer: &'b mut Buffer<T, CAP, Idx>) -> Self {
         Self {
             buffer,
             _phantom: PhantomData,
@@ -37,7 +37,7 @@ impl<'b, T, const CAP: usize, Sync: ProvidesIndices> Reader<'b, T, CAP, Sync> {
 
         let region = unsafe { slice::from_raw_parts_mut(start, len) };
 
-        let head = Sync::get_mut(&mut self.buffer.head);
+        let head = Index::get_mut(&mut self.buffer.head);
         let mut region = ReadRegion::new(region, head);
 
         let res = fun(&mut region);

@@ -2,21 +2,16 @@ use core::{cmp::min, marker::PhantomData, mem::MaybeUninit, slice};
 
 use crate::{
     Buffer,
-    sync::{DefaultSynchronization, ProvidesIndices, Synchronization, WriteRegion},
+    indices::{Index, SyncIndex},
+    sync::{Synchronization, WriteRegion},
 };
 
 /// Writable view into a buffer
 ///
 /// For this to be safe to interact with, only a single [`Writer`] must exist at
 /// the same time
-pub struct Writer<
-    'b,
-    T,
-    const CAP: usize,
-    BufferSync: ProvidesIndices = DefaultSynchronization,
-    Sync = BufferSync,
-> {
-    buffer: &'b Buffer<T, CAP, BufferSync>,
+pub struct Writer<'b, T, const CAP: usize, Idx: Index, Sync> {
+    buffer: &'b Buffer<T, CAP, Idx>,
     sync: Sync,
     /// Ensure at least contravariance in T
     ///
@@ -25,15 +20,10 @@ pub struct Writer<
     _phantom: PhantomData<fn(T)>,
 }
 
-impl<
-    'b,
-    T,
-    const CAP: usize,
-    BufferSync: ProvidesIndices,
-    Sync: Synchronization<Usize = BufferSync::Usize>,
-> Writer<'b, T, CAP, BufferSync, Sync>
+impl<'b, T, const CAP: usize, Idx: Index + SyncIndex, Sync: Synchronization<Idx>>
+    Writer<'b, T, CAP, Idx, Sync>
 {
-    pub(in crate::sync) const fn new(buffer: &'b Buffer<T, CAP, BufferSync>, sync: Sync) -> Self {
+    pub(in crate::sync) const fn new(buffer: &'b Buffer<T, CAP, Idx>, sync: Sync) -> Self {
         Self {
             buffer,
             sync,
@@ -65,7 +55,7 @@ impl<
     /// region is dropped.
     ///
     /// The returned region will be empty only if the buffer is full.
-    pub fn write<R>(&mut self, fun: impl FnOnce(&mut WriteRegion<'_, T, Sync>) -> R) -> R {
+    pub fn write<R>(&mut self, fun: impl FnOnce(&mut WriteRegion<'_, T, Idx, Sync>) -> R) -> R {
         let (start, len) = self.fetch_start_and_len_contiguous();
 
         // Pointer to the start of the buffer
@@ -128,14 +118,13 @@ impl<
 }
 
 #[cfg(test)]
-#[cfg(target_has_atomic = "ptr")]
 mod tests {
-    use crate::{Buffer, sync::Atomics};
+    use crate::sync::Buffer;
 
     /// A write region is empty exactly when the buffer is full.
     #[test]
     fn write_region_empty_only_when_full() {
-        let mut buf = Buffer::<i32, 4, Atomics>::new();
+        let mut buf = Buffer::<i32, 4>::new();
         let (mut w, _r) = buf.split();
 
         assert!(!w.write(|reg| reg.is_empty()));
@@ -149,7 +138,7 @@ mod tests {
     /// truncated at the wrap boundary.
     #[test]
     fn write_region_truncates_at_wrap() {
-        let mut buf = Buffer::<i32, 4, Atomics>::new();
+        let mut buf = Buffer::<i32, 4>::new();
         let (mut w, mut r) = buf.split();
 
         for i in 0..3 {

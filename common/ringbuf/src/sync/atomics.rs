@@ -5,29 +5,16 @@ use core::sync::atomic::{
     Ordering::{Acquire, Relaxed, Release},
 };
 
-use crate::{ConstDefault, ConstZero, sealed::Sealed, sync::ProvidesIndices};
+use crate::{ConstDefault, Index, indices::SyncIndex, sealed::Sealed};
 
-use super::{Synchronization};
+use super::Synchronization;
 
 /// Synchronize using atomics
 #[derive(Default, Clone, Copy)]
 pub struct Atomics;
 impl Sealed for Atomics {}
-impl ProvidesIndices for Atomics {
-    type Usize = AtomicUsize;
-    fn get_mut(var: &mut Self::Usize) -> &mut usize {
-        var.get_mut()
-    }
-
-    unsafe fn get(var: &Self::Usize) -> usize {
-        // Relaxed is enough: the caller guarantees exclusive access, so there
-        // is no concurrent writer to pair an `Acquire` with. Ordered reads go
-        // through `Synchronization::get` instead.
-        var.load(Relaxed)
-    }
-}
-impl Synchronization for Atomics {
-    fn get(self, var: &Self::Usize) -> usize {
+impl Synchronization<AtomicUsize> for Atomics {
+    fn get(self, var: &AtomicUsize) -> usize {
         // Acquire pairs with the `Release` in `wrapping_add` on the other side:
         // a reader that observes the writer's new `tail` (or vice-versa for
         // `head`) is guaranteed to also see the slot writes that preceded it,
@@ -35,7 +22,7 @@ impl Synchronization for Atomics {
         var.load(Acquire)
     }
 
-    fn wrapping_add(self, var: &Self::Usize, value: usize) {
+    fn wrapping_add(self, var: &AtomicUsize, value: usize) {
         // Release: publish the slot reads/writes performed by this region
         // before the cursor advance becomes visible to the other side.
         var.fetch_add(value, Release);
@@ -50,6 +37,21 @@ impl Synchronization for Atomics {
 impl ConstDefault for Atomics {
     const DEFAULT: Self = Atomics;
 }
-impl ConstZero for AtomicUsize {
+
+impl Sealed for AtomicUsize {}
+impl Index for AtomicUsize {
     const ZERO: Self = AtomicUsize::new(0);
+    fn get_mut(&mut self) -> &mut usize {
+        self.get_mut()
+    }
+
+    unsafe fn get_unsync(&self) -> usize {
+        // Relaxed is enough: the caller guarantees exclusive access, so there
+        // is no concurrent writer to pair an `Acquire` with. Ordered reads go
+        // through `Synchronization::get` instead.
+        self.load(Relaxed)
+    }
+}
+impl SyncIndex for AtomicUsize {
+    type Sync = Atomics;
 }
