@@ -2,8 +2,8 @@ use core::{cmp::min, marker::PhantomData, mem::MaybeUninit, slice};
 
 use crate::{
     Buffer,
-    indices::{Index, SyncIndex},
-    sync::{Synchronization, WriteRegion},
+    indices::Index,
+    sync::{SyncIndex, Synchronization, WriteRegion},
 };
 
 /// Writable view into a buffer

@@ -16,7 +16,7 @@ fn main() -> ! {
     };
 
     ReadSerial::new(reader)
-        .buffer::<128>()
+        .buffer::<128, usize>()
         .sink_into(WriteSerial::new(writer))
         .handle_errors(|err| match err {})
         .block_on()

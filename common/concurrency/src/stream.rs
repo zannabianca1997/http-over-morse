@@ -2,6 +2,8 @@
 //!
 //! Basis of pull-based concurrency
 
+use ringbuf::indices::Index;
+
 use crate::{
     handle_errors::HandleErrors,
     process::pipe::Pipe,
@@ -105,7 +107,7 @@ pub trait StreamExt: Stream {
     ///
     /// The buffer will be eagerly filled until blocking, then items will be
     /// streamed from the buffer.
-    fn buffer<const CAP: usize>(self) -> Buffered<Self, Self::Item, CAP>
+    fn buffer<const CAP: usize, Idx: Index>(self) -> Buffered<Self, Self::Item, CAP, Idx>
     where
         Self: Sized,
     {

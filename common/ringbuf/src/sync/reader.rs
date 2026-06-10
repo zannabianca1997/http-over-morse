@@ -4,8 +4,8 @@ use core::{cmp::min, marker::PhantomData, mem::MaybeUninit, slice};
 
 use crate::{
     Buffer,
-    indices::{Index, SyncIndex},
-    sync::{ReadRegion, Synchronization},
+    indices::Index,
+    sync::{ReadRegion, SyncIndex, Synchronization},
 };
 
 /// Readable view into a buffer

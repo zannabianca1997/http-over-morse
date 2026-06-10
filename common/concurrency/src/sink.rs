@@ -2,6 +2,8 @@
 //!
 //! Basis of push-based concurrency
 
+use ringbuf::indices::Index;
+
 use crate::{
     handle_errors::HandleErrors,
     process::pipe::Pipe,
@@ -118,7 +120,7 @@ pub trait SinkExt: Sink {
     ///
     /// The buffer will be eagerly emptied until blocking, then items will be
     /// sunk from the buffer.
-    fn buffer<const CAP: usize>(self) -> Buffered<Self, Self::Item, CAP>
+    fn buffer<const CAP: usize, Idx: Index>(self) -> Buffered<Self, Self::Item, CAP, Idx>
     where
         Self: Sized,
     {

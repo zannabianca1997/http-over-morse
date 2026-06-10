@@ -1,4 +1,4 @@
-use ringbuf::unsync::{Buffer, ReadRegion, WriteRegion};
+use ringbuf::{indices::Index, unsync::{Buffer, ReadRegion, WriteRegion}};
 
 use crate::{
     sink::{BufferSink, Sink},
@@ -8,12 +8,12 @@ use crate::{
 mod sync;
 mod unsync;
 
-pub struct Buffered<Inner, T, const CAP: usize> {
+pub struct Buffered<Inner, T, const CAP: usize, Idx: Index> {
     inner: Inner,
-    buffer: Buffer<T, CAP>,
+    buffer: Buffer<T, CAP, Idx>,
 }
 
-impl<Inner, T, const CAP: usize> Buffered<Inner, T, CAP> {
+impl<Inner, T, const CAP: usize, Idx: Index> Buffered<Inner, T, CAP, Idx> {
     pub fn new(inner: Inner) -> Self {
         Self {
             inner,
@@ -22,13 +22,13 @@ impl<Inner, T, const CAP: usize> Buffered<Inner, T, CAP> {
     }
 }
 
-impl<Inner, const CAP: usize> BufferStream for Buffered<Inner, Inner::Item, CAP>
+impl<Inner, const CAP: usize, Idx: Index> BufferStream for Buffered<Inner, Inner::Item, CAP, Idx>
 where
     Inner: Stream,
 {
     type Item = Inner::Item;
     type Err = Inner::Err;
-    type Ready<'s> = ReadRegion<'s, Inner::Item>;
+    type Ready<'s> = ReadRegion<'s, Inner::Item, Idx>;
 
     fn with_ready<R, F>(&mut self, fun: F) -> Result<R, Self::Err>
     where
@@ -49,13 +49,13 @@ where
     }
 }
 
-impl<Inner, const CAP: usize> BufferSink for Buffered<Inner, Inner::Item, CAP>
+impl<Inner, const CAP: usize, Idx: Index> BufferSink for Buffered<Inner, Inner::Item, CAP, Idx>
 where
     Inner: Sink,
 {
     type Item = Inner::Item;
     type Err = Inner::Err;
-    type Slots<'s> = WriteRegion<'s, Inner::Item>;
+    type Slots<'s> = WriteRegion<'s, Inner::Item, Idx>;
 
     fn with_slots<R>(
         &mut self,

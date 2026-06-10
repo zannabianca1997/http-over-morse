@@ -1,11 +1,16 @@
 //! Methods on indices
 
-use crate::{sealed::Sealed, sync::Synchronization};
+use crate::sealed::Sealed;
 
-/// Const trait returning the zero of a type
+/// Type that can be used as a index in an buffer
 pub trait Index: 'static + Sealed + Sized {
     const ZERO: Self;
+    const MAX: usize;
     fn get_mut(&mut self) -> usize;
+
+    /// Wrapping add to a value
+    ///
+    /// This need to wrap aroung a power of 2
     fn wrapping_add_mut(&mut self, value: usize);
 
     /// Read the index through a shared reference, without synchronization.
@@ -17,8 +22,4 @@ pub trait Index: 'static + Sealed + Sized {
     /// belongs to (e.g. by holding it through `&mut Buffer`), so that no
     /// other party can be concurrently mutating the index.
     unsafe fn get_unsync(&self) -> usize;
-}
-pub trait SyncIndex: Index {
-    type Sync: Synchronization<Self>;
-    const SYNC: Self::Sync;
 }

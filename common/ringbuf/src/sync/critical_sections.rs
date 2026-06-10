@@ -4,7 +4,7 @@ use core::cell::Cell;
 
 use avr_device::interrupt::{CriticalSection, Mutex, free};
 
-use crate::{Index, indices::SyncIndex, sealed::Sealed, sync::DefineCriticalSectionMethods};
+use crate::{Index, sealed::Sealed, sync::DefineCriticalSectionMethods, sync::SyncIndex};
 
 use super::Synchronization;
 
@@ -12,13 +12,18 @@ use super::Synchronization;
 #[derive(Default, Clone, Copy)]
 pub struct CriticalSections;
 impl Sealed for CriticalSections {}
-impl Synchronization<Mutex<Cell<usize>>> for CriticalSections {
-    fn get(self, var: &Mutex<Cell<usize>>) -> usize {
-        free(|cs| var.borrow(cs).get())
+impl<Idx: Index + Copy> Synchronization<Mutex<Cell<Idx>>> for CriticalSections {
+    fn get(self, var: &Mutex<Cell<Idx>>) -> usize {
+        free(|cs| Idx::get_mut(&mut var.borrow(cs).get()))
     }
 
-    fn wrapping_add(self, var: &Mutex<Cell<usize>>, value: usize) {
-        free(|cs| var.borrow(cs).update(|t| t.wrapping_add(value)))
+    fn wrapping_add(self, var: &Mutex<Cell<Idx>>, value: usize) {
+        free(|cs| {
+            var.borrow(cs).update(|mut t| {
+                Idx::wrapping_add_mut(&mut t, value);
+                t
+            })
+        })
     }
 
     type CriticalSection<'cs> = CriticalSection<'cs>;
@@ -28,15 +33,15 @@ impl Synchronization<Mutex<Cell<usize>>> for CriticalSections {
     }
 }
 
-impl Sealed for Mutex<Cell<usize>> {}
-impl Index for Mutex<Cell<usize>> {
-    const ZERO: Self = Mutex::new(Cell::new(0));
+impl<Idx: Index + Copy> Sealed for Mutex<Cell<Idx>> {}
+impl<Idx: Index + Copy> Index for Mutex<Cell<Idx>> {
+    const ZERO: Self = Mutex::new(Cell::new(Idx::ZERO));
+    const MAX: usize = usize::MAX;
     fn get_mut(&mut self) -> usize {
-        *self.get_mut().get_mut()
+        Idx::get_mut(self.get_mut().get_mut())
     }
     fn wrapping_add_mut(&mut self, value: usize) {
-        let var = self.get_mut().get_mut();
-        *var = var.wrapping_add(value);
+        Idx::wrapping_add_mut(self.get_mut().get_mut(), value)
     }
 
     unsafe fn get_unsync(&self) -> usize {
@@ -44,10 +49,10 @@ impl Index for Mutex<Cell<usize>> {
         // nothing (main code or ISR) can be mutating this cell concurrently —
         // the plain read a conjured token permits is race-free, and no `cli`
         // needs to be emitted.
-        self.borrow(unsafe { CriticalSection::new() }).get()
+        Idx::get_mut(&mut self.borrow(unsafe { CriticalSection::new() }).get())
     }
 }
-impl SyncIndex for Mutex<Cell<usize>> {
+impl<Idx: Index + Copy> SyncIndex for Mutex<Cell<Idx>> {
     type Sync = CriticalSections;
     const SYNC: Self::Sync = CriticalSections;
 }
@@ -56,18 +61,21 @@ impl DefineCriticalSectionMethods for CriticalSections {}
 
 /// Syncronization in a critical section
 impl Sealed for CriticalSection<'_> {}
-impl Synchronization<Mutex<Cell<usize>>> for CriticalSection<'_> {
+impl<Idx: Index + Copy> Synchronization<Mutex<Cell<Idx>>> for CriticalSection<'_> {
     type CriticalSection<'cs> = CriticalSection<'cs>;
 
     fn free<R>(self, fun: impl FnOnce(Self::CriticalSection<'_>) -> R) -> R {
         fun(self)
     }
 
-    fn get(self, var: &Mutex<Cell<usize>>) -> usize {
-        var.borrow(self).get()
+    fn get(self, var: &Mutex<Cell<Idx>>) -> usize {
+        Idx::get_mut(&mut var.borrow(self).get())
     }
 
-    fn wrapping_add(self, var: &Mutex<Cell<usize>>, value: usize) {
-        var.borrow(self).update(|t| t.wrapping_add(value))
+    fn wrapping_add(self, var: &Mutex<Cell<Idx>>, value: usize) {
+        var.borrow(self).update(|mut t| {
+            Idx::wrapping_add_mut(&mut t, value);
+            t
+        })
     }
 }
