@@ -5,7 +5,6 @@ use core::{marker::PhantomData, mem::MaybeUninit, ptr::NonNull};
 struct RawRegion<'o> {
     region: NonNull<()>,
     len: usize,
-    original_len: usize,
     start_index_storage: &'o mut usize,
 }
 
@@ -14,7 +13,6 @@ impl<'o> RawRegion<'o> {
         let len = region.len();
         let region = NonNull::from_mut(region).cast();
         Self {
-            original_len: len,
             region,
             len,
             start_index_storage,
@@ -27,13 +25,6 @@ impl<'o> RawRegion<'o> {
 
     fn is_empty(&self) -> bool {
         self.len == 0
-    }
-}
-
-impl<'o> Drop for RawRegion<'o> {
-    fn drop(&mut self) {
-        let used = self.original_len - self.len;
-        *self.start_index_storage = self.start_index_storage.wrapping_add(used);
     }
 }
 
@@ -60,7 +51,7 @@ impl<'o, T> ReadRegion<'o, T> {
 
         let region: NonNull<T> = self.raw.region.cast();
 
-        self.raw.len -= 1;
+        *self.raw.start_index_storage += 1;
         self.raw.region = unsafe { region.add(1) }.cast();
 
         Some(unsafe { region.read() })
@@ -101,7 +92,7 @@ impl<'o, T> WriteRegion<'o, T> {
         } else {
             return Some(WriteRegionSlot(
                 &mut self.raw.region,
-                &mut self.raw.len,
+                self.raw.start_index_storage,
                 PhantomData,
             ));
         }
@@ -130,7 +121,7 @@ impl<'o, T> WriteRegionSlot<'o, T> {
         let t: NonNull<MaybeUninit<T>> = self.0.cast();
         unsafe { t.write(MaybeUninit::new(value)) };
         *self.0 = unsafe { t.add(1) }.cast();
-        *self.1 -= 1;
+        *self.1 += 1;
     }
 }
 
