@@ -87,6 +87,16 @@ impl<T, const CAP: usize, Sync: ProvidesIndices> Drop for Buffer<T, CAP, Sync> {
 pub trait ProvidesIndices {
     type Usize: ConstZero + 'static;
     fn get_mut(var: &mut Self::Usize) -> &mut usize;
+
+    /// Read the index through a shared reference, without synchronization.
+    ///
+    /// Compiles to a plain load: no atomics ordering, no critical section.
+    ///
+    /// # Safety
+    /// The caller must guarantee exclusive access to the buffer this index
+    /// belongs to (e.g. by holding it through `&mut Buffer`), so that no
+    /// other party can be concurrently mutating the index.
+    unsafe fn get(var: &Self::Usize) -> usize;
 }
 
 /// Const version of the default trait
@@ -340,7 +350,7 @@ mod tests_unsync {
         assert_eq!(r.pop(), Some(0));
         drop(r);
 
-        let mut w = buf.writer_mut();
+        let w = buf.writer_mut();
         assert_eq!(w.available(), 1);
     }
 

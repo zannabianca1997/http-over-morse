@@ -61,14 +61,9 @@ impl<'o, T> ReadRegion<'o, T> {
         let region: NonNull<T> = self.raw.region.cast();
 
         self.raw.len -= 1;
-        self.raw.region = unsafe {
-            region.add(1)
-        }
-        .cast();
+        self.raw.region = unsafe { region.add(1) }.cast();
 
-        Some(unsafe {
-            region.read()
-        })
+        Some(unsafe { region.read() })
     }
 
     pub fn len(&self) -> usize {
@@ -80,9 +75,7 @@ impl<'o, T> ReadRegion<'o, T> {
     }
 
     pub fn as_slice(&self) -> &[T] {
-        unsafe {
-            NonNull::slice_from_raw_parts(self.raw.region.cast(), self.raw.len).as_ref()
-        }
+        unsafe { NonNull::slice_from_raw_parts(self.raw.region.cast(), self.raw.len).as_ref() }
     }
 }
 
@@ -135,13 +128,8 @@ pub struct WriteRegionSlot<'o, T>(&'o mut NonNull<()>, &'o mut usize, PhantomDat
 impl<'o, T> WriteRegionSlot<'o, T> {
     pub fn fill(self, value: T) {
         let t: NonNull<MaybeUninit<T>> = self.0.cast();
-        unsafe {
-            t.write(MaybeUninit::new(value))
-        };
-        *self.0 = unsafe {
-            t.add(1)
-        }
-        .cast();
+        unsafe { t.write(MaybeUninit::new(value)) };
+        *self.0 = unsafe { t.add(1) }.cast();
         *self.1 -= 1;
     }
 }

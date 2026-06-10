@@ -19,6 +19,10 @@ impl ProvidesIndices for Unsync {
     fn get_mut(var: &mut Self::Usize) -> &mut usize {
         var
     }
+
+    unsafe fn get(var: &Self::Usize) -> usize {
+        *var
+    }
 }
 impl ConstZero for usize {
     const ZERO: Self = 0;
@@ -37,10 +41,9 @@ impl<T, const CAP: usize, Sync: ProvidesIndices> crate::Buffer<T, CAP, Sync> {
         Reader::new(self)
     }
 
-    fn get_head_and_tail_mut(&mut self) -> (usize, usize) {
-        let head = *Sync::get_mut(&mut self.head);
-        let tail = *Sync::get_mut(&mut self.tail);
-
-        (head, tail)
+    fn get_head_and_tail_unsync(&self) -> (usize, usize) {
+        // Safety: callers (the unsync Reader/Writer) hold this buffer through
+        // a mutable borrow, guaranteeing exclusive access.
+        unsafe { (Sync::get(&self.head), Sync::get(&self.tail)) }
     }
 }

@@ -21,6 +21,14 @@ impl ProvidesIndices for ShortCriticalSections {
     fn get_mut(var: &mut Self::Usize) -> &mut usize {
         var.get_mut().get_mut()
     }
+
+    unsafe fn get(var: &Self::Usize) -> usize {
+        // Safety: the caller guarantees exclusive access to the buffer, so
+        // nothing (main code or ISR) can be mutating this cell concurrently —
+        // the plain read a conjured token permits is race-free, and no `cli`
+        // needs to be emitted.
+        var.borrow(unsafe { CriticalSection::new() }).get()
+    }
 }
 impl Synchronization for ShortCriticalSections {
     fn get(self, var: &Self::Usize) -> usize {
@@ -52,6 +60,15 @@ impl ProvidesIndices for CriticalSection<'_> {
     type Usize = Mutex<Cell<usize>>;
     fn get_mut(var: &mut Self::Usize) -> &mut usize {
         var.get_mut().get_mut()
+    }
+
+    unsafe fn get(var: &Self::Usize) -> usize {
+        var.borrow(unsafe {
+            // Safety: the caller guarantees exclusive access to the buffer, so
+            // nothing can be mutating this cell concurrently
+            CriticalSection::new()
+        })
+        .get()
     }
 }
 impl Synchronization for CriticalSection<'_> {

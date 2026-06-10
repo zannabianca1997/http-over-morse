@@ -2,7 +2,7 @@
 
 use core::sync::atomic::{
     AtomicUsize,
-    Ordering::{Acquire, Release},
+    Ordering::{Acquire, Relaxed, Release},
 };
 
 use crate::{ConstDefault, ConstZero, sync::ProvidesIndices};
@@ -17,6 +17,13 @@ impl ProvidesIndices for Atomics {
     type Usize = AtomicUsize;
     fn get_mut(var: &mut Self::Usize) -> &mut usize {
         var.get_mut()
+    }
+
+    unsafe fn get(var: &Self::Usize) -> usize {
+        // Relaxed is enough: the caller guarantees exclusive access, so there
+        // is no concurrent writer to pair an `Acquire` with. Ordered reads go
+        // through `Synchronization::get` instead.
+        var.load(Relaxed)
     }
 }
 impl Synchronization for Atomics {

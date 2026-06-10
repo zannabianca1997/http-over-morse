@@ -19,8 +19,8 @@ impl<'b, T, const CAP: usize, Sync: ProvidesIndices> Reader<'b, T, CAP, Sync> {
         }
     }
 
-    pub fn available(&mut self) -> usize {
-        let (start, end) = self.fetch_start_and_end_mut();
+    pub fn available(&self) -> usize {
+        let (start, end) = self.fetch_start_and_end();
         end.wrapping_sub(start)
     }
 
@@ -29,17 +29,13 @@ impl<'b, T, const CAP: usize, Sync: ProvidesIndices> Reader<'b, T, CAP, Sync> {
     }
 
     pub fn read<R>(&mut self, fun: impl FnOnce(&mut ReadRegion<'_, T>) -> R) -> R {
-        let (start, len) = self.fetch_start_and_len_contiguous_mut();
+        let (start, len) = self.fetch_start_and_len_contiguous();
 
         let buffer = self.buffer.content.get().cast::<MaybeUninit<T>>();
 
-        let start = unsafe {
-            buffer.add(start & (CAP - 1))
-        };
+        let start = unsafe { buffer.add(start & (CAP - 1)) };
 
-        let region = unsafe {
-            slice::from_raw_parts_mut(start, len)
-        };
+        let region = unsafe { slice::from_raw_parts_mut(start, len) };
 
         let head = Sync::get_mut(&mut self.buffer.head);
         let mut region = ReadRegion::new(region, head);
@@ -51,8 +47,8 @@ impl<'b, T, const CAP: usize, Sync: ProvidesIndices> Reader<'b, T, CAP, Sync> {
         res
     }
 
-    fn fetch_start_and_end_mut(&mut self) -> (usize, usize) {
-        let (head, tail) = self.buffer.get_head_and_tail_mut();
+    fn fetch_start_and_end(&self) -> (usize, usize) {
+        let (head, tail) = self.buffer.get_head_and_tail_unsync();
 
         let start = head;
         let end = tail;
@@ -60,8 +56,8 @@ impl<'b, T, const CAP: usize, Sync: ProvidesIndices> Reader<'b, T, CAP, Sync> {
         (start, end)
     }
 
-    fn fetch_start_and_len_contiguous_mut(&mut self) -> (usize, usize) {
-        let (start, end) = self.fetch_start_and_end_mut();
+    fn fetch_start_and_len_contiguous(&self) -> (usize, usize) {
+        let (start, end) = self.fetch_start_and_end();
 
         let non_wrapping_len = CAP - (start & (CAP - 1));
         let init_len = end.wrapping_sub(start);
