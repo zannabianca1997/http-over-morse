@@ -5,11 +5,10 @@ use core::cell::Cell;
 use avr_device::interrupt::{CriticalSection, Mutex, free};
 
 use crate::{
-    ConstDefault, ConstZero,
-    sync::{DefineCriticalSectionMethods, ProvidesIndices},
+    ConstDefault, ConstZero, sealed::Sealed, sync::{DefineCriticalSectionMethods, ProvidesIndices}
 };
 
-use super::{Synchronization, sealed::Sealed};
+use super::{Synchronization};
 
 /// Synchronization through short critical sections around the atomic operations
 #[derive(Default, Clone, Copy)]

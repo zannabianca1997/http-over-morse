@@ -3,10 +3,6 @@
 
 use crate::{ConstDefault, ProvidesIndices};
 
-mod sealed {
-    pub trait Sealed {}
-}
-
 pub use reader::Reader;
 pub use region::{ReadRegion, WriteRegion, WriteRegionSlot};
 pub use writer::Writer;
@@ -16,7 +12,7 @@ mod region;
 mod writer;
 
 /// Synchronization method
-pub trait Synchronization: sealed::Sealed + Copy + ProvidesIndices {
+pub trait Synchronization: Copy + ProvidesIndices {
     type CriticalSection<'cs>: Synchronization<Usize = Self::Usize>;
     fn free<R>(self, fun: impl FnOnce(Self::CriticalSection<'_>) -> R) -> R;
 

@@ -5,9 +5,9 @@ use core::sync::atomic::{
     Ordering::{Acquire, Relaxed, Release},
 };
 
-use crate::{ConstDefault, ConstZero, sync::ProvidesIndices};
+use crate::{ConstDefault, ConstZero, sealed::Sealed, sync::ProvidesIndices};
 
-use super::{Synchronization, sealed::Sealed};
+use super::{Synchronization};
 
 /// Synchronize using atomics
 #[derive(Default, Clone, Copy)]

@@ -84,7 +84,11 @@ impl<T, const CAP: usize, Sync: ProvidesIndices> Drop for Buffer<T, CAP, Sync> {
     }
 }
 
-pub trait ProvidesIndices {
+mod sealed {
+    pub trait Sealed {}
+}
+
+pub trait ProvidesIndices: sealed::Sealed {
     type Usize: ConstZero + 'static;
     fn get_mut(var: &mut Self::Usize) -> &mut usize;
 

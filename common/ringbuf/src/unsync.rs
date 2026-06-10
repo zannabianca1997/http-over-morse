@@ -2,7 +2,7 @@
 //!
 //! Avoid paying the cost of synchronization
 
-use crate::{ConstZero, ProvidesIndices};
+use crate::{ConstZero, ProvidesIndices, sealed::Sealed};
 
 pub use reader::Reader;
 pub use region::{ReadRegion, WriteRegion, WriteRegionSlot};
@@ -12,7 +12,11 @@ mod reader;
 mod region;
 mod writer;
 
+/// Buffer that can be accessed only through the unsync API
+///
+/// This avoid setting up any syncronization ballet
 pub enum Unsync {}
+impl Sealed for Unsync { }
 impl ProvidesIndices for Unsync {
     type Usize = usize;
 
