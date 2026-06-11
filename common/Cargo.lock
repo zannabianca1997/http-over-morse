@@ -517,6 +517,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b947ae49db0d222b1dbc6b113ce7248a3fc3a6ca21b696717bfc000ba4484d8"
 
 [[package]]
+name = "morse-build"
+version = "0.1.0"
+dependencies = [
+ "either",
+ "itertools",
+ "morse-symbol",
+ "proc-macro2",
+ "quote",
+]
+
+[[package]]
+name = "morse-enums"
+version = "0.1.0"
+dependencies = [
+ "cargo-emit",
+ "proc-macro2",
+ "quote",
+]
+
+[[package]]
+name = "morse-symbol"
+version = "0.1.0"
+
+[[package]]
 name = "nb"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -1,6 +1,15 @@
 [workspace]
 resolver = "3"
-members = ["concurrency", "encoding", "lookup_hash", "primes", "ringbuf"]
+members = [
+  "concurrency",
+  "encoding",
+  "lookup_hash",
+  "morse/build",
+  "morse/enums",
+  "morse/symbol",
+  "primes",
+  "ringbuf"
+]
 
 [workspace.package]
 edition = "2024"
@@ -8,9 +17,9 @@ license = "MIT"
 
 [workspace.dependencies]
 concurrency = { path = "concurrency" }
+lookup_hash = { path = "lookup_hash" }
+primes = { path = "primes" }
 ringbuf = { path = "ringbuf" }
-primes = { path="primes"}
-lookup_hash = {path="lookup_hash"}
 
 # General purpose
 
@@ -24,7 +33,6 @@ zerocopy = { version = "0.8.50", features = ["derive"] }
 cargo-emit = "0.2.1"
 proc-macro2 = { version = "1.0.106", default-features = false }
 quote = { version = "1.0.45", default-features = false }
-
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

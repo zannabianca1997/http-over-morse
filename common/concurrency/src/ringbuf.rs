@@ -1,4 +1,7 @@
-use ringbuf::{indices::Index, unsync::{Buffer, ReadRegion, WriteRegion}};
+use ringbuf::{
+    indices::Index,
+    unsync::{Buffer, ReadRegion, WriteRegion},
+};
 
 use crate::{
     sink::{BufferSink, Sink},

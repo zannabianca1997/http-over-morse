@@ -2,7 +2,9 @@
 
 use core::convert::Infallible;
 
-use ringbuf::sync::{ReadRegion, Reader, SyncIndex, Synchronization, WriteRegion, WriteRegionSlot, Writer};
+use ringbuf::sync::{
+    ReadRegion, Reader, SyncIndex, Synchronization, WriteRegion, WriteRegionSlot, Writer,
+};
 
 use crate::{
     ready::Ready,

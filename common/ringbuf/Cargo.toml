@@ -9,7 +9,7 @@ avr-device = { version = "0.8.1", optional = true }
 nunny.workspace = true
 
 [features]
-default = ["atmega328p"]
+default = []
 atmega328p = ["avr-device/atmega328p"]
 
 [lints]
