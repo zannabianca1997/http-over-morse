@@ -10,6 +10,9 @@
     "Baudrate",
     "Uninit",
     "ringbuf",
-    "Unsync"
+    "Unsync",
+    "prosign",
+    "impls",
+    "prosigns"
   ]
 }

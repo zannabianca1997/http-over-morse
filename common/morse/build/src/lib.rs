@@ -1,11 +1,11 @@
 #![doc = include_str!("../README.md")]
 
-use std::collections::BTreeSet;
+use std::{cmp, collections::BTreeSet};
 
 use either::Either::{Left, Right};
 use itertools::Itertools;
 use morse_symbol::Symbol;
-use proc_macro2::{Ident, Literal};
+use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 
 static LETTERS: &[(u8, &'static [u8])] = &[
@@ -67,85 +67,38 @@ enum GroupData {
         ascii: u8,
     },
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Group {
     Letter,
     WordSpace,
     Prosign,
 }
 impl Group {
-    fn combinations() -> &'static [&'static [Self]] {
+    fn all() -> BTreeSet<Self> {
         use Group::*;
-        &[
-            &[Letter],
-            &[WordSpace],
-            &[Prosign],
-            &[Letter, WordSpace],
-            &[WordSpace, Prosign],
-            &[Letter, Prosign],
-            &[Letter, WordSpace, Prosign],
-        ]
+        BTreeSet::from([Letter, WordSpace, Prosign])
+    }
+    fn combinations() -> impl IntoIterator<Item = BTreeSet<Self>> {
+        let all = Self::all();
+        all.into_iter()
+            .map(|v| [None, Some(v)])
+            .multi_cartesian_product()
+            .map(|v| v.into_iter().flatten().collect::<BTreeSet<_>>())
+            .filter(|s| !s.is_empty())
     }
 
-    fn complement(combination: & [Self]) -> Option<&'static [Self]> {
-        use Group::*;
-        Some(match combination {
-            &[Letter] => &[WordSpace, Prosign],
-            &[WordSpace] => &[Letter, Prosign],
-            &[Prosign] => &[Letter, WordSpace],
-            &[Letter, WordSpace] => &[Prosign],
-            &[WordSpace, Prosign] => &[Letter],
-            &[Letter, Prosign] => &[WordSpace],
-            &[Letter, WordSpace, Prosign] => return None,
-            _ => panic!(),
-        })
+    fn subsets(combination: &BTreeSet<Self>) -> impl IntoIterator<Item = BTreeSet<Self>> + use<> {
+        combination
+            .into_iter()
+            .copied()
+            .map(|v| [None, Some(v)])
+            .multi_cartesian_product()
+            .filter(|v| v.iter().any(Option::is_some) && v.iter().any(Option::is_none))
+            .map(|v| v.into_iter().flatten().collect::<BTreeSet<_>>())
     }
 
-    fn supersets(combination: & [Self]) -> &'static [&'static [Self]] {
-        use Group::*;
-        match combination {
-            &[Letter] => &[
-                &[Letter, WordSpace],
-                &[Letter, Prosign],
-                &[Letter, WordSpace, Prosign],
-            ],
-            &[WordSpace] => &[
-                &[Letter, WordSpace],
-                &[WordSpace, Prosign],
-                &[Letter, WordSpace, Prosign],
-            ],
-            &[Prosign] => &[
-                &[Letter, Prosign],
-                &[WordSpace, Prosign],
-                &[Letter, WordSpace, Prosign],
-            ],
-            &[Letter, WordSpace] | &[WordSpace, Prosign] | &[Letter, Prosign] => {
-                &[&[Letter, WordSpace, Prosign]]
-            }
-            &[Letter, WordSpace, Prosign] => &[],
-            _ => panic!(),
-        }
-    }
-    fn subsets(combination: & [Self]) -> &'static [&'static [Self]] {
-        use Group::*;
-        match combination {
-            &[Letter] | &[WordSpace] | &[Prosign] => &[],
-            &[Letter, WordSpace] => &[&[Letter], &[WordSpace]],
-            &[WordSpace, Prosign] => &[&[WordSpace], &[Prosign]],
-
-            &[Letter, Prosign] => &[&[Letter], &[Prosign]],
-            &[Letter, WordSpace, Prosign] => &[
-                &[Letter],
-                &[WordSpace],
-                &[Prosign],
-                &[Letter, WordSpace],
-                &[WordSpace, Prosign],
-                &[Letter, Prosign],
-            ],
-            _ => panic!(),
-        }
-    }
-
-    fn combination_name(combination: &[Self]) -> Ident {
+    fn combination_name(combination: &BTreeSet<Self>) -> Ident {
         let name = combination
             .iter()
             .map(|c| match c {
@@ -176,7 +129,7 @@ impl Item {
                     ascii_aliases: vec![],
                     symbols: code(ch),
                 },
-                name: format_ident!("L_{}", ch as char),
+                name: format_ident!("L{}", ch as char),
                 value: 0,
             })
             .chain((b'0'..=b'9').map(|ch| Self {
@@ -186,7 +139,7 @@ impl Item {
                     ascii_aliases: vec![],
                     symbols: code(ch),
                 },
-                name: format_ident!("D_{}", ch as char),
+                name: format_ident!("D{}", ch as char),
                 value: 0,
             }))
             .map(|mut item| {
@@ -295,7 +248,7 @@ impl Item {
     }
 
     /// Iter all prosigns with the given encoding, inside the given groups
-    fn iter(encoding: Encoding, groups: &[Group]) -> impl IntoIterator<Item = Self> {
+    fn iter(encoding: Encoding, groups: &BTreeSet<Group>) -> impl IntoIterator<Item = Self> {
         // Iter all, as the numeration must be consistent
         let all = Self::letters()
             .into_iter()
@@ -331,23 +284,11 @@ impl Item {
             })),
         };
 
-        numbered.filter(|n| {
-            groups.iter().any(|g| match g {
-                Group::Letter => n.is_letter(),
-                Group::WordSpace => n.is_word_space(),
-                Group::Prosign => n.is_prosign(),
-            })
+        numbered.filter(|n| match n.group {
+            GroupData::Letter { .. } => groups.contains(&Group::Letter),
+            GroupData::WordSpace => groups.contains(&Group::WordSpace),
+            GroupData::Prosign { .. } => groups.contains(&Group::Prosign),
         })
-    }
-
-    fn is_letter(&self) -> bool {
-        matches!(self.group, GroupData::Letter { .. })
-    }
-    fn is_word_space(&self) -> bool {
-        matches!(self.group, GroupData::WordSpace)
-    }
-    fn is_prosign(&self) -> bool {
-        matches!(self.group, GroupData::Prosign { .. })
     }
 
     fn variant(&self) -> impl ToTokens + use<> {
@@ -355,39 +296,100 @@ impl Item {
         let value = Literal::byte_character(*value);
         quote! { #name = #value }
     }
+}
 
-    fn r#enum(encoding: Encoding, groups: &[Group]) -> impl ToTokens {
-        let name = Group::combination_name(groups);
-        let variants = Self::iter(encoding, groups)
-            .into_iter()
-            .map(|v| v.variant());
+fn r#enum(encoding: Encoding, groups: &BTreeSet<Group>) -> impl ToTokens + use<> {
+    let name = Group::combination_name(groups);
+    let variants = Vec::from_iter(Item::iter(encoding, groups));
 
-        let from_impls = Group::subsets(groups).iter().map(|subset| {
-            let subset = Group::combination_name(subset);
+    let convert_impls = Group::subsets(groups).into_iter().map(|subset| {
+        let subset_name = Group::combination_name(&subset);
+
+        let complement = groups.difference(&subset).copied().collect::<BTreeSet<_>>();
+        let try_from = if !complement.is_empty() {
+            let complement_name = Group::combination_name(&complement);
+
+            let matching = match_pattern(
+                Item::iter(encoding, &subset)
+                    .into_iter()
+                    .map(|Item { value, .. }| value),
+            );
+            let not_matching = match_pattern(
+                Item::iter(encoding, &complement)
+                    .into_iter()
+                    .map(|Item { value, .. }| value),
+            );
+
             quote! {
-                impl From< #subset > for #name {
-                    fn from(value: #subset) -> Self {
-                        unsafe { ::core::mem::transmute(value) }
+                impl TryFrom< #name > for #subset_name {
+                    type Error = #complement_name;
+                    fn try_from(value: #name) -> Result<Self, Self::Error> {
+                        match value as u8 {
+                            #matching     => Ok( unsafe { ::core::mem::transmute(value) }),
+                            #not_matching => Err(unsafe { ::core::mem::transmute(value) }),
+                            _ => unsafe { ::core::hint::unreachable_unchecked() }
+                        }
                     }
                 }
             }
-        });
+        } else {
+            quote! {}
+        };
 
         quote! {
-            enum #name {
-                #( #variants ),*
+            impl From< #subset_name > for #name {
+                fn from(value: #subset_name) -> Self {
+                    unsafe { ::core::mem::transmute(value) }
+                }
             }
 
-            #( #from_impls )*
+            #try_from
         }
-    }
+    });
 
-    pub fn enums(encoding: Encoding) -> impl ToTokens {
-        let enums = Group::combinations()
-            .into_iter()
-            .map(|groups| Self::r#enum(encoding, groups));
-        quote! { #( #enums )* }
+    let variants = variants.iter().map(|v| v.variant());
+
+    quote! {
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        #[repr(u8)]
+        pub enum #name {
+            #( #variants ),*
+        }
+
+        #( #convert_impls )*
     }
+}
+
+pub fn enums(encoding: Encoding) -> impl ToTokens {
+    let enums = Group::combinations()
+        .into_iter()
+        .map(|groups| r#enum(encoding, &groups));
+    quote! { #( #enums )* }
+}
+
+fn match_pattern(matching: impl Iterator<Item = u8>) -> TokenStream {
+    matching
+        .map(|value| (value, value))
+        .sorted_by_key(|(a, _)| *a)
+        .coalesce(|a, b| {
+            if a.1.checked_add(1) == Some(b.0) {
+                Ok((a.0, b.1))
+            } else {
+                Err((a, b))
+            }
+        })
+        .map(|value| {
+            if value.0 == value.1 {
+                let value = Literal::byte_character(value.0);
+                quote! { # value }
+            } else {
+                let start = Literal::byte_character(value.0);
+                let end = Literal::byte_character(value.1);
+                quote! { #start ..= #end }
+            }
+        })
+        .reduce(|a, b| quote! { #a | #b})
+        .unwrap_or_default()
 }
 
 fn code(ch: u8) -> Vec<Symbol> {

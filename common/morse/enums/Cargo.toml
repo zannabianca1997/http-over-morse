@@ -6,6 +6,7 @@ license.workspace = true
 
 [build-dependencies]
 cargo-emit.workspace = true
+morse-build = { path = "../build" }
 proc-macro2.workspace = true
 quote.workspace = true
 
