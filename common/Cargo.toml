@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["concurrency", "encoding", "ringbuf"]
+members = ["concurrency", "encoding", "lookup_hash", "primes", "ringbuf"]
 
 [workspace.package]
 edition = "2024"
@@ -9,6 +9,8 @@ license = "MIT"
 [workspace.dependencies]
 concurrency = { path = "concurrency" }
 ringbuf = { path = "ringbuf" }
+primes = { path="primes"}
+lookup_hash = {path="lookup_hash"}
 
 # General purpose
 
@@ -16,6 +18,13 @@ either = { version = "1.16.0", default-features = false }
 nb = "1.1.0"
 nunny = { version = "0.2.2", default-features = false }
 zerocopy = { version = "0.8.50", features = ["derive"] }
+
+# Code generation
+
+cargo-emit = "0.2.1"
+proc-macro2 = { version = "1.0.106", default-features = false }
+quote = { version = "1.0.45", default-features = false }
+
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
