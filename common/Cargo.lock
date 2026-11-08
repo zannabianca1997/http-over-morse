@@ -553,7 +553,9 @@ name = "morse-enums"
 version = "0.1.0"
 dependencies = [
  "cargo-emit",
+ "lookup_hash",
  "morse-build",
+ "morse-symbol",
  "proc-macro2",
  "quote",
 ]

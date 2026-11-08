@@ -18,7 +18,7 @@ license = "MIT"
 [workspace.dependencies]
 concurrency = { path = "concurrency" }
 itertools = "0.14.0"
-lookup_hash = { path = "lookup_hash" }
+lookup_hash = { path = "lookup_hash", default-features = false }
 primes = { path = "primes" }
 ringbuf = { path = "ringbuf" }
 
@@ -43,3 +43,13 @@ syn = { version = "2.0.110", default-features = false, features = [
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
+
+# Computing the LUT tables is very intensive, and it runs in build scripts:
+# profiles are only valid at the workspace root
+[profile.dev.build-override]
+opt-level = 3
+codegen-units = 1
+
+[profile.release.build-override]
+opt-level = 3
+codegen-units = 1

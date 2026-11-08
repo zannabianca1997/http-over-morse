@@ -623,7 +623,9 @@ fn decode_enum(encoding: Encoding) -> TokenStream {
         syn::Visibility::Inherited,
         "Static lookup table for the next decoded state",
     );
-    let lut_lookup = digest_lut.lookup_call(lut_name, quote! {symbol});
+    let lut_lookup = digest_lut.lookup_call(lut_name, quote! {
+       (symbol as u8) | (self as u8)
+    });
 
     quote! {
         #[derive(Clone, Copy, PartialEq, Eq)]

@@ -7,7 +7,7 @@ license.workspace = true
 [dependencies]
 either.workspace = true
 itertools.workspace = true
-lookup_hash.workspace = true
+lookup_hash = { workspace = true, features = ["search"] }
 morse-symbol = { path = "../symbol" }
 proc-macro2.workspace = true
 quote.workspace = true

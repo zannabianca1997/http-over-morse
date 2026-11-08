@@ -10,10 +10,7 @@ use serial::{ReadSerial, WriteSerial};
 fn main() -> ! {
     let Peripherals {
         serial: Serial { reader, writer },
-    } = unsafe {
-        // Safety: main just started
-        Peripherals::new_unchecked()
-    };
+    } = Peripherals::new();
 
     ReadSerial::new(reader)
         .buffer::<128, usize>()

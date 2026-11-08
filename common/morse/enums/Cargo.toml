@@ -4,6 +4,10 @@ version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 
+[dependencies]
+morse-symbol = { path = "../symbol" }
+lookup_hash = { workspace = true, default-features = false }
+
 [build-dependencies]
 cargo-emit.workspace = true
 morse-build = { path = "../build" }
@@ -12,14 +16,3 @@ quote.workspace = true
 
 [lints]
 workspace = true
-
-# Computing LUT table is very intensive,
-# better run it with optimizations
-
-[profile.dev.build-override]
-opt-level = 3
-codegen-units = 1
-
-[profile.release.build-override]
-opt-level = 3
-codegen-units = 1
