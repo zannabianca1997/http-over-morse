@@ -12,3 +12,14 @@ quote.workspace = true
 
 [lints]
 workspace = true
+
+# Computing LUT table is very intensive,
+# better run it with optimizations
+
+[profile.dev.build-override]
+opt-level = 3
+codegen-units = 1
+
+[profile.release.build-override]
+opt-level = 3
+codegen-units = 1

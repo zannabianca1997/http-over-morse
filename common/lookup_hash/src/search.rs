@@ -13,6 +13,7 @@ use std::{
     boxed::Box,
     collections::{BTreeMap, BTreeSet},
     string::ToString,
+    vec::Vec,
 };
 use syn::{Expr, ItemStatic, Type, Visibility, parse_quote};
 
@@ -26,17 +27,24 @@ pub fn search<T: Eq + Ord + ToTokens + Send + Serialize + Clone + Sync>(
     fun: impl Fn(u8) -> Option<T> + Send + Sync,
 ) -> Found {
     // Count the number of different values fun return to limit the search space
-    let min_size = (u8::MIN..=u8::MAX)
-        .filter_map(&fun)
-        .collect::<BTreeSet<T>>()
-        .len();
+    let values: BTreeSet<T> = (u8::MIN..=u8::MAX).filter_map(&fun).collect();
 
-    let Ok(min_size) = u8::try_from(min_size) else {
+    let Ok(min_size) = u8::try_from(values.len()) else {
         // function maps all bytes to different values
         return identity(typ_name, fun);
     };
 
+    let values: Vec<T> = values.into_iter().collect();
+
     let cached_fun: [Option<T>; 256] = array::from_fn(|i| fun(i as u8));
+
+    // Refer to values by their index in `values`, so the search loop can
+    // compare cheap `u8`s instead of cloning and comparing whole values
+    let cached_idx: [Option<u8>; 256] = array::from_fn(|i| {
+        cached_fun[i]
+            .as_ref()
+            .map(|v| values.iter().position(|x| x == v).unwrap() as u8)
+    });
 
     // max size of an efficient hash
     //
@@ -46,26 +54,40 @@ pub fn search<T: Eq + Ord + ToTokens + Send + Serialize + Clone + Sync>(
         .enumerate()
         .filter_map(|(i, v)| v.is_some().then_some(i))
         .last()
+        .unwrap()
         + 1;
 
-    for size in min_size..max_size {
-        let found = Prime::all().par_iter().find_map_any(|&modulus| {
-            'multipliers: for multiplier in 1u16..u16::MAX {
-                let mut mapped: [Option<T>; 256] = array::from_fn(|_| None);
+    let mut moduli = Prime::all().as_slice();
+    while let Some((first, rest)) = moduli.split_first()
+        && first.get() < min_size as u16
+    {
+        moduli = rest
+    }
+
+    for size in usize::from(min_size)..max_size {
+        let size = size as u8; // always fits, as max_size is at most 256
+
+        let found = moduli.par_iter().find_map_any(|&modulus| {
+            'multipliers: for multiplier in 1u16..modulus.get() {
+                let mut mapped: [Option<u8>; 256] = array::from_fn(|_| None);
 
                 for input in u8::MIN..=u8::MAX {
                     let hash = hash(multiplier, modulus.get(), size, input);
-                    let Some(output) = &cached_fun[input as usize] else {
+                    let Some(idx) = cached_idx[input as usize] else {
                         // function has no requirements on this value
                         continue;
                     };
 
-                    if mapped[hash as usize].as_ref().is_some_and(|v| v != output) {
+                    if mapped[hash as usize].is_some_and(|previous| previous != idx) {
                         // Hash is not a match
                         continue 'multipliers;
                     }
-                    mapped[hash as usize] = Some(output.clone())
+                    mapped[hash as usize] = Some(idx)
                 }
+
+                // Found a match: build the value mapping, cloning values only now
+                let mapped: [Option<T>; 256] =
+                    array::from_fn(|slot| mapped[slot].map(|idx| values[idx as usize].clone()));
 
                 return Some((
                     NonZeroU16::new(multiplier).unwrap(),
