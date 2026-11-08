@@ -18,6 +18,7 @@ concurrency = { path = "../common/concurrency" }
 
 # Mixed utils
 either = { version = "1.16.0", default-features = false }
+envparse = "0.1.0"
 nb = "1.1.0"
 nunny = { version = "0.2.2", default-features = false }
 zerocopy = { version = "0.8.50", features = ["derive"] }

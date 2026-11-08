@@ -4,6 +4,10 @@ version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 
+[package.metadata.hom.ravedude-override.general]
+open-console = true
+serial-baudrate = 9600
+
 [[bin]]
 bench = false
 name = "serial-echo"
@@ -11,6 +15,7 @@ test = false
 
 [dependencies]
 concurrency.workspace = true
+envparse.workspace = true
 hal.workspace = true
 serial.workspace = true
 

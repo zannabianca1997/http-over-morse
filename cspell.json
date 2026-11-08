@@ -5,20 +5,24 @@
     "chrono",
     "codegen",
     "discr",
+    "envparse",
     "impls",
     "itertools",
+    "nunny",
     "phcache",
     "portb",
     "portc",
     "portd",
     "prosign",
     "prosigns",
+    "ravedude",
     "ringbuf",
     "rustflags",
     "serde",
     "Uninit",
     "Unsync",
-    "Usart"
+    "Usart",
+    "zerocopy"
   ],
   "userWords": [
     "s"
