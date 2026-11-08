@@ -6,7 +6,7 @@ edition.workspace = true
 [dependencies]
 either.workspace = true
 nb.workspace = true
-ringbuf.workspace = true
+ringbuf = { workspace = true, features = ["atmega328p"] }
 
 [lints]
 workspace = true

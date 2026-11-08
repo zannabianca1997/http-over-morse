@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Utc};
 use quote::ToTokens;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use super::{
     Found,
@@ -12,6 +13,7 @@ use super::{
         path::Path,
         string::String,
         string::ToString,
+        sync::Mutex,
         time::Instant,
         vec::Vec,
     },
@@ -20,21 +22,26 @@ use super::{
 #[derive(Debug)]
 pub struct Cache {
     file: File,
-    dirty: bool,
-    content: Content,
+    content: Mutex<Content>,
+}
+
+fn default_dirty() -> bool {
+    false
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Content {
+    #[serde(skip, default = "default_dirty")]
+    dirty: bool,
     updated: DateTime<Utc>,
-    total_time: Duration,
+    total_time: iso8601_duration::Duration,
     tables: Vec<Entry>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Entry {
     created: DateTime<Utc>,
-    calc_time: Duration,
+    calc_time: iso8601_duration::Duration,
     mapping: BTreeMap<u8, serde_json::Value>,
     typ: String,
     def: String,
@@ -52,7 +59,7 @@ impl Entry {
         calc_time: Duration,
     ) -> Self {
         Self {
-            calc_time,
+            calc_time: iso8601_duration::Duration::parse(&calc_time.to_string()).unwrap(),
             created: Utc::now(),
             mapping,
             typ: typ.to_token_stream().to_string(),
@@ -88,8 +95,9 @@ impl Cache {
                 if err.kind() == io::ErrorKind::NotFound {
                     // Init new cache file
                     let content = Content {
+                        dirty: false,
                         updated: Utc::now(),
-                        total_time: Duration::zero(),
+                        total_time: iso8601_duration::Duration::new(0., 0., 0., 0., 0., 0.01),
                         tables: Vec::new(),
                     };
 
@@ -113,16 +121,12 @@ impl Cache {
 
         let content = serde_json::from_reader(&mut file).context("Cannot parse cache file")?;
 
-        Ok(Self {
-            file,
-            content,
-            dirty: false,
-        })
+        Ok(Self { file, content })
     }
 
     /// Save the cache file
     pub fn save(&mut self) -> Result<()> {
-        if !self.dirty {
+        if !self.content.get_mut().unwrap().dirty {
             return Ok(());
         }
 
@@ -134,31 +138,45 @@ impl Cache {
         let len = self.file.stream_position()?;
         self.file.set_len(len)?;
 
-        self.dirty = false;
+        self.content.get_mut().unwrap().dirty = false;
 
         Ok(())
     }
 
     /// Get a cached table
-    pub fn get<T: Serialize>(&self, fun: impl Fn(u8) -> Option<T>) -> Option<Found> {
+    fn get_inner<T: Serialize>(
+        &self,
+        fun: impl Fn(u8) -> Option<T>,
+    ) -> (Option<Found>, BTreeMap<u8, Value>) {
         let mapping = (u8::MIN..=u8::MAX)
             .filter_map(|i| fun(i).map(|v| (i, serde_json::to_value(v).unwrap())))
             .collect();
 
-        self.content
+        let found = self
+            .content
+            .lock()
+            .unwrap()
             .tables
             .iter()
             .find(|t| t.mapping == mapping)
-            .map(Entry::parse)
+            .map(Entry::parse);
+
+        (found, mapping)
+    }
+
+    /// Get a cached table
+    pub fn get<T: Serialize>(&self, fun: impl Fn(u8) -> Option<T>) -> Option<Found> {
+        self.get_inner(fun).0
     }
 
     /// Get or calculate a table
-    pub fn get_or_calculate<T: Eq + Ord + ToTokens + Send + Serialize>(
-        &mut self,
+    pub fn get_or_calculate<T: Eq + Ord + ToTokens + Send + Serialize + Clone + Sync>(
+        &self,
         typ_name: impl ToTokens,
         fun: impl Fn(u8) -> Option<T> + Send + Sync,
     ) -> Found {
-        if let Some(cached) = self.get(&fun) {
+        let (cached, mapping) = self.get_inner(&fun);
+        if let Some(cached) = cached {
             return cached;
         }
 
@@ -166,11 +184,24 @@ impl Cache {
         let found = super::search(typ_name, fun);
         let elapsed = Duration::from_std(start.elapsed()).unwrap();
 
-        self.content.tables.push(Entry::new(found.clone(), elapsed));
+        let mut content = self.content.lock().unwrap();
 
-        self.dirty = true;
-        self.content.updated = Utc::now();
-        self.content.total_time += elapsed;
+        if let Some(cached) = content
+            .tables
+            .iter()
+            .find(|t| t.mapping == mapping)
+            .map(Entry::parse)
+        {
+            // Someone got it before, we calculated it twice
+            return cached;
+        }
+
+        content.tables.push(Entry::new(found.clone(), elapsed));
+
+        content.dirty = true;
+        content.updated = Utc::now();
+        let time_delta = content.total_time.to_chrono().unwrap() + elapsed;
+        content.total_time = iso8601_duration::Duration::parse(&time_delta.to_string()).unwrap();
 
         found
     }

@@ -21,7 +21,7 @@ use crate::hash;
 pub mod cache;
 
 /// Build a lookup table for the given function
-pub fn search<T: Eq + Ord + ToTokens + Send + Serialize>(
+pub fn search<T: Eq + Ord + ToTokens + Send + Serialize + Clone + Sync>(
     typ_name: impl ToTokens,
     fun: impl Fn(u8) -> Option<T> + Send + Sync,
 ) -> Found {
@@ -36,22 +36,35 @@ pub fn search<T: Eq + Ord + ToTokens + Send + Serialize>(
         return identity(typ_name, fun);
     };
 
-    for size in min_size..=u8::MAX {
+    let cached_fun: [Option<T>; 256] = array::from_fn(|i| fun(i as u8));
+
+    // max size of an efficient hash
+    //
+    // over this, just skip hashing and do a plain lookup
+    let max_size = cached_fun
+        .iter()
+        .enumerate()
+        .filter_map(|(i, v)| v.is_some().then_some(i))
+        .last()
+        + 1;
+
+    for size in min_size..max_size {
         let found = Prime::all().par_iter().find_map_any(|&modulus| {
-            for multiplier in 1u16..u16::MAX {
+            'multipliers: for multiplier in 1u16..u16::MAX {
                 let mut mapped: [Option<T>; 256] = array::from_fn(|_| None);
 
                 for input in u8::MIN..=u8::MAX {
                     let hash = hash(multiplier, modulus.get(), size, input);
-                    let Some(output) = fun(hash) else {
+                    let Some(output) = &cached_fun[input as usize] else {
                         // function has no requirements on this value
                         continue;
                     };
 
-                    if mapped[hash as usize].as_ref().is_some_and(|v| v != &output) {
-                        return None;
+                    if mapped[hash as usize].as_ref().is_some_and(|v| v != output) {
+                        // Hash is not a match
+                        continue 'multipliers;
                     }
-                    mapped[hash as usize] = Some(output)
+                    mapped[hash as usize] = Some(output.clone())
                 }
 
                 return Some((
@@ -70,7 +83,7 @@ pub fn search<T: Eq + Ord + ToTokens + Send + Serialize>(
         }
     }
 
-    // Failed, returning identitity
+    // Failed, returning identity
     identity(typ_name, fun)
 }
 
@@ -116,7 +129,7 @@ fn table<T: ToTokens + Serialize>(
         })
         .collect();
 
-    let mapped = mapped.into_iter().map(|value| {
+    let mapped = mapped[..size].into_iter().map(|value| {
         if let Some(value) = value {
             quote! { :: core :: mem :: MaybeUninit :: new ( #value ) }
         } else {
@@ -175,12 +188,8 @@ impl Found {
     }
 
     /// Call to lookup in the table
-    pub fn lookup_call(&self, static_name: Ident, arg: impl ToTokens) -> Expr {
-        parse_quote! {
-            (
-                #static_name . lookup ( #arg )
-            )
-        }
+    pub fn lookup_call(&self, name: Ident, arg: impl ToTokens) -> Expr {
+        parse_quote! { #name . lookup ( #arg ) }
     }
 
     /// Size of the generated table

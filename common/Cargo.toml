@@ -17,6 +17,7 @@ license = "MIT"
 
 [workspace.dependencies]
 concurrency = { path = "concurrency" }
+itertools = "0.14.0"
 lookup_hash = { path = "lookup_hash" }
 primes = { path = "primes" }
 ringbuf = { path = "ringbuf" }
@@ -33,6 +34,12 @@ zerocopy = { version = "0.8.50", features = ["derive"] }
 cargo-emit = "0.2.1"
 proc-macro2 = { version = "1.0.106", default-features = false }
 quote = { version = "1.0.45", default-features = false }
+syn = { version = "2.0.110", default-features = false, features = [
+  "clone-impls",
+  "full",
+  "parsing",
+  "printing"
+] }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

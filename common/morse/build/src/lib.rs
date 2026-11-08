@@ -1,12 +1,18 @@
 #![doc = include_str!("../README.md")]
 
-use std::{cmp, collections::BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    env,
+    path::Path,
+};
 
 use either::Either::{Left, Right};
 use itertools::Itertools;
+use lookup_hash::search::cache::Cache;
 use morse_symbol::Symbol;
 use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{ToTokens, format_ident, quote};
+use serde::Serialize;
 
 static LETTERS: &[(u8, &'static [u8])] = &[
     (b'A', b".-"),
@@ -47,12 +53,16 @@ static LETTERS: &[(u8, &'static [u8])] = &[
     (b'9', b"----."),
 ];
 
+/// A recognized byte
+#[derive(Debug, Clone)]
 pub struct Item {
     group: GroupData,
     name: Ident,
     value: u8,
 }
 
+/// Interpretation of a byte
+#[derive(Debug, Clone)]
 enum GroupData {
     Letter {
         symbols: Vec<Symbol>,
@@ -253,28 +263,34 @@ impl Item {
         let all = Self::letters()
             .into_iter()
             .chain(Self::word_space())
-            .chain(Self::prosigns());
+            .chain(Self::prosigns())
+            .collect_vec();
 
         let numbered = match encoding {
             Encoding::Base32 => Right({
-                let mut unassigned = 0;
-                let mut assigned = BTreeSet::new();
-                all.map(move |mut item| {
+                let mut next_to_assign = 0;
+                let assigned =
+                    BTreeSet::from_iter(all.iter().filter_map(|item| match item.group {
+                        GroupData::Letter { base32, .. } => base32,
+                        GroupData::Prosign { .. } | GroupData::WordSpace => None,
+                    }));
+                all.into_iter().map(move |mut item| {
                     let value = match item.group {
                         GroupData::Letter { base32, .. } => base32,
                         GroupData::Prosign { .. } | GroupData::WordSpace => None,
                     };
                     item.value = value.unwrap_or_else(|| {
-                        while assigned.contains(&unassigned) {
-                            unassigned += 1
+                        while assigned.contains(&next_to_assign) {
+                            next_to_assign += 1
                         }
-                        unassigned
+                        let value = next_to_assign;
+                        next_to_assign += 1;
+                        value
                     });
-                    assigned.insert(item.value);
                     item
                 })
             }),
-            Encoding::Ascii => Left(all.map(|mut item| {
+            Encoding::Ascii => Left(all.into_iter().map(|mut item| {
                 let value = match item.group {
                     GroupData::Letter { ascii, .. } | GroupData::Prosign { ascii, .. } => ascii,
                     GroupData::WordSpace => b' ',
@@ -364,7 +380,8 @@ pub fn enums(encoding: Encoding) -> impl ToTokens {
     let enums = Group::combinations()
         .into_iter()
         .map(|groups| r#enum(encoding, &groups));
-    quote! { #( #enums )* }
+    let decode = decode_enum(encoding);
+    quote! { #( #enums )* #decode }
 }
 
 fn match_pattern(matching: impl Iterator<Item = u8>) -> TokenStream {
@@ -405,6 +422,239 @@ fn code(ch: u8) -> Vec<Symbol> {
             _ => unreachable!(),
         })
         .collect()
+}
+
+#[derive(Debug, Clone)]
+pub struct DecodeVariant {
+    name: Ident,
+    discriminant: u8,
+    symbols: Vec<Symbol>,
+    lead_to: Option<Item>,
+}
+
+impl DecodeVariant {
+    fn iter(encoding: Encoding) -> impl IntoIterator<Item = Self> {
+        let mut symbols = Item::iter(encoding, &BTreeSet::from([Group::Letter, Group::Prosign]))
+            .into_iter()
+            .flat_map(|item| {
+                let (GroupData::Letter { symbols, .. } | GroupData::Prosign { symbols, .. }) =
+                    item.group.clone()
+                else {
+                    unreachable!()
+                };
+
+                let mut prequel = vec![];
+
+                for i in 0..symbols.len() {
+                    prequel.push((symbols[..i].to_owned(), None, 0));
+                }
+
+                prequel.push((symbols, Some(item), 0));
+
+                prequel
+            })
+            // put all items before so unique do not cancel them
+            .sorted_unstable_by_key(|(_, i, _)| i.is_some().then_some(0).unwrap_or(1))
+            .unique_by(|(s, _, _)| s.clone())
+            .sorted_by_key(|(s, _, _)| s.len())
+            .collect_vec();
+
+        let mut next_to_assign = 0;
+        let assigned = symbols
+            .iter()
+            .filter_map(|(_, item, _)| item.as_ref().map(|Item { value, .. }| *value))
+            .collect::<BTreeSet<_>>();
+
+        for (_, item, discriminant) in symbols.iter_mut() {
+            if let Some(Item { value, .. }) = item {
+                *discriminant = *value;
+            } else {
+                while assigned.contains(&next_to_assign) {
+                    next_to_assign += 1
+                }
+                *discriminant = next_to_assign;
+                next_to_assign += 1;
+            }
+        }
+
+        symbols
+            .into_iter()
+            .map(|(symbols, item, discriminant)| DecodeVariant {
+                name: Self::variant_name(&symbols),
+                discriminant,
+                symbols,
+                lead_to: item,
+            })
+    }
+
+    fn variant_name(symbols: &[Symbol]) -> Ident {
+        if symbols.is_empty() {
+            return format_ident!("Empty");
+        }
+
+        format_ident!(
+            "{}",
+            symbols
+                .iter()
+                .copied()
+                .map(|symbol| match symbol {
+                    Symbol::LINE => "Line",
+                    Symbol::DOT => "Dot",
+                })
+                .join("")
+        )
+    }
+}
+
+fn decode_enum(encoding: Encoding) -> TokenStream {
+    let variants = DecodeVariant::iter(encoding).into_iter().collect_vec();
+
+    assert!(
+        variants
+            .iter()
+            .all(|v| v.discriminant & morse_symbol::MASK == 0),
+        "Some variants superpose on symbol bits"
+    );
+
+    let arms = variants.iter().map(
+        |DecodeVariant {
+             name, discriminant, ..
+         }| {
+            let discriminant = Literal::byte_character(*discriminant);
+            quote! { #name = #discriminant}
+        },
+    );
+
+    let eject = match_pattern(variants.iter().flat_map(
+        |DecodeVariant {
+             discriminant,
+             lead_to,
+             ..
+         }| lead_to.is_some().then_some(*discriminant),
+    ));
+    let no_eject = match_pattern(variants.iter().flat_map(
+        |DecodeVariant {
+             discriminant,
+             lead_to,
+             ..
+         }| lead_to.is_none().then_some(*discriminant),
+    ));
+
+    let cache =
+        Cache::load(&Path::new(&env::var_os("CARGO_MANIFEST_DIR").unwrap()).join(".phcache"))
+            .unwrap();
+
+    // Decode states reachable by symbol sequences and by discriminant
+    let known = variants
+        .iter()
+        .map(|DecodeVariant { symbols, .. }| symbols.clone())
+        .collect::<BTreeSet<_>>();
+    let by_discriminant = variants
+        .iter()
+        .map(
+            |DecodeVariant {
+                 symbols,
+                 discriminant,
+                 ..
+             }| (*discriminant, symbols.clone()),
+        )
+        .collect::<BTreeMap<_, _>>();
+
+    // Build the digest table, mapping `state | symbol` to the next decode state.
+    // Calculated once and cached in `.phcache` for the following builds.
+    let digest_lut = cache.get_or_calculate(format_ident!("Decode"), |val| {
+        /// Result of digesting a new symbol into the decode state machine
+        ///
+        /// There is no fail state, as error correction is made on upper levels.
+        /// Here, erroring out means the decoder restarts from whatever state
+        #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+        struct DigestResult(Vec<Symbol>);
+
+        impl Serialize for DigestResult {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                self.0
+                    .iter()
+                    .map(|s| s.char() as char)
+                    .collect::<String>()
+                    .serialize(serializer)
+            }
+        }
+
+        impl ToTokens for DigestResult {
+            fn to_tokens(&self, tokens: &mut TokenStream) {
+                let name = DecodeVariant::variant_name(&self.0);
+                quote! { Decode :: #name  }.to_tokens(tokens)
+            }
+        }
+
+        let new_symbol = {
+            let symbol = val & morse_symbol::MASK;
+            if symbol == Symbol::DOT as u8 {
+                Symbol::DOT
+            } else if symbol == Symbol::LINE as u8 {
+                Symbol::LINE
+            } else {
+                unreachable!()
+            }
+        };
+
+        let Some(current) = by_discriminant.get(&(val & !morse_symbol::MASK)) else {
+            // Unknown state, no requirement on this input
+            return None;
+        };
+
+        // Continue the sequence when it leads to a known state, otherwise
+        // restart the decoding from the new symbol alone
+        let mut symbols = current.clone();
+        symbols.push(new_symbol);
+        if !known.contains(&symbols) {
+            symbols = vec![new_symbol];
+        }
+
+        Some(DigestResult(symbols))
+    });
+
+    let lut_name = format_ident!("LUT");
+    let static_lut_def = digest_lut.static_def(
+        lut_name.clone(),
+        syn::Visibility::Inherited,
+        "Static lookup table for the next decoded state",
+    );
+    let lut_lookup = digest_lut.lookup_call(lut_name, quote! {symbol});
+
+    quote! {
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        #[repr(u8)]
+        pub enum Decode {
+            #( #arms ),*
+        }
+
+        impl Decode {
+            /// Init a new decode state
+            pub const fn new() -> Self {
+                Self::Empty
+            }
+
+            /// Digest a new symbol
+            pub const fn digest(self, symbol: ::morse_symbol::Symbol ) -> Self {
+                #static_lut_def
+                #lut_lookup
+            }
+
+
+            /// Finish decoding a sequence of symbols
+            pub const fn finish(self) -> Option<LetterOrProsign> {
+                match self as u8 {
+                    #eject    => Some( unsafe { ::core::mem::transmute(self) }),
+                    #no_eject => None,
+                    _ => unsafe { ::core::hint::unreachable_unchecked() }
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]

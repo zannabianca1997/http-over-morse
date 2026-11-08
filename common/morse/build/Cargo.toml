@@ -6,10 +6,13 @@ license.workspace = true
 
 [dependencies]
 either.workspace = true
-itertools = "0.14.0"
+itertools.workspace = true
+lookup_hash.workspace = true
 morse-symbol = { path = "../symbol" }
 proc-macro2.workspace = true
 quote.workspace = true
+serde = { version = "1.0.228", default-features = false }
+syn.workspace = true
 
 [lints]
 workspace = true

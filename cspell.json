@@ -1,18 +1,26 @@
 {
   "words": [
-    "codegen",
     "atmega",
-    "rustflags",
-    "Usart",
+    "Baudrate",
+    "chrono",
+    "codegen",
+    "discr",
+    "impls",
+    "itertools",
+    "phcache",
     "portb",
     "portc",
     "portd",
-    "Baudrate",
-    "Uninit",
-    "ringbuf",
-    "Unsync",
     "prosign",
-    "impls",
-    "prosigns"
+    "prosigns",
+    "ringbuf",
+    "rustflags",
+    "serde",
+    "Uninit",
+    "Unsync",
+    "Usart"
+  ],
+  "userWords": [
+    "s"
   ]
 }
