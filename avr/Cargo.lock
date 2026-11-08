@@ -420,6 +420,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "led-control"
+version = "0.1.0"
+dependencies = [
+ "concurrency",
+ "envparse",
+ "hal",
+ "nb 1.1.0",
+ "serial",
+]
+
+[[package]]
 name = "litemap"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

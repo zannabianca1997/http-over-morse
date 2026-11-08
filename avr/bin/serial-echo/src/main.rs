@@ -3,15 +3,17 @@
 #![no_main]
 
 use concurrency::{process::ProcessExt, stream::StreamExt};
+use envparse::parse_env;
 use hal::{Peripherals, Serial};
 use serial::{ReadSerial, WriteSerial};
 
-const BUFFER_SIZE: usize = parse_env!("BUFFER_SIZE" as usize in 1..);
+const BUFFER_SIZE: usize = parse_env!("BUFFER_SIZE" as usize else 128);
 
 #[hal::entry]
 fn main() -> ! {
     let Peripherals {
         serial: Serial { reader, writer },
+        ..
     } = Peripherals::new().unwrap();
 
     ReadSerial::new(reader)

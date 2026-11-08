@@ -1,0 +1,26 @@
+[package]
+name = "led-control"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[package.metadata.hom]
+configurations = ["BUFFER_SIZE"]
+
+[package.metadata.hom.ravedude-override.general]
+serial-baudrate = 9600
+
+[[bin]]
+bench = false
+name = "led-control"
+test = false
+
+[dependencies]
+concurrency.workspace = true
+envparse.workspace = true
+hal.workspace = true
+nb.workspace = true
+serial.workspace = true
+
+[lints]
+workspace = true
