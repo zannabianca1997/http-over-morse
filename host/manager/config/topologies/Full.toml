@@ -1,0 +1,22 @@
+# All three boards connected in a cycle
+
+[board.B1]
+port = 1
+
+[board.B1.wires]
+A = "12"
+B = "31"
+
+[board.B2]
+port = 2
+
+[board.B2.wires]
+A = "23"
+B = "12"
+
+[board.B3]
+port = 3
+
+[board.B3.wires]
+A = "31"
+B = "23"

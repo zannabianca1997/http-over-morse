@@ -7,9 +7,6 @@ license.workspace = true
 [package.metadata.hom]
 configurations = ["BUFFER_SIZE"]
 
-[package.metadata.hom.ravedude-override.general]
-serial-baudrate = 9600
-
 [[bin]]
 bench = false
 name = "serial-echo"

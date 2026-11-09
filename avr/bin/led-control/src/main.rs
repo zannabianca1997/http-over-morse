@@ -14,7 +14,7 @@ use envparse::parse_env;
 use hal::{Peripherals, Serial, led::DebugLed};
 use serial::{ReadSerial, WriteSerial};
 
-const BUFFER_SIZE: usize = parse_env!("BUFFER_SIZE" as usize else 128);
+const BUFFER_SIZE: usize = parse_env!("BUFFER_SIZE" as usize else 64);
 
 /// Interpret single byte commands read from the input stream to control the
 /// led, answering with the state after
@@ -43,17 +43,16 @@ where
                 while let Some(slot) = slots.slot()
                     && let Some(command) = ready.pop()
                 {
-                    let mut state = None;
-                    match command {
+                    let state = match command {
                         // \1 - turn off
                         0x01 => {
                             self.led.off();
-                            state = Some(false);
+                            false
                         }
                         // \2 - turn on
                         0x02 => {
                             self.led.on();
-                            state = Some(true);
+                            true
                         }
                         // \3 - toggle
                         0x03 => {
@@ -63,22 +62,17 @@ where
                             } else {
                                 self.led.off();
                             }
-                            state = Some(new_state);
+                            new_state
                         }
                         // \4 - no-op, effectively a read
-                        0x04 => state = Some(self.led.state()),
-                        // unknown command: ignore it silently. Line noise reads
-                        // as `\0`, and answering it would only feed the storm
-                        _ => {}
+                        0x04 => self.led.state(),
+                        // unknown command
+                        cmd => return Err(nb::Error::Other(UnknownCommand(cmd))),
                     };
 
-                    if let Some(state) = state {
-                        work_done = true;
-                        // the state is encoded as `\1` when off and `\2` when
-                        // on: `\0` is never a valid answer, so line noise is
-                        // always distinguishable from one
-                        slot.fill(1 + state as u8);
-                    }
+                    work_done = true;
+
+                    slot.fill(1 + state as u8);
                 }
 
                 if work_done {

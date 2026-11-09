@@ -1,7 +1,0 @@
-# Basic test scenario: single board, serial echo on that
-
-[boards.tested]
-bin = "serial-echo"
-
-[boards.tested.config]
-BUFFER_SIZE = 128

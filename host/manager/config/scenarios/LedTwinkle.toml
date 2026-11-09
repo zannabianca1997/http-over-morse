@@ -1,0 +1,12 @@
+# Simple demonstration with all leds turning on and off
+
+topology = ["Full"]
+
+[boards.B1]
+bin = "led-control"
+
+[boards.B2]
+bin = "led-control"
+
+[boards.B3]
+bin = "led-control"

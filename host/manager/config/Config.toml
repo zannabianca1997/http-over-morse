@@ -1,0 +1,8 @@
+[connection]
+# where the file system stores the serial devices
+base_dir = "/dev/serial/by-path"
+# matcher for the serial device path.
+#
+# The first part is the hub, then the port. This assumes they are all
+# connected straight to the hub.
+path = "*-usb-*:*.{board.port}:1.0-port0"
