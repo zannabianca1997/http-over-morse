@@ -55,6 +55,7 @@ impl<'o, T, Idx: Index> ReadRegion<'o, T, Idx> {
 
         Idx::wrapping_add_mut(self.raw.start_index_storage, 1);
         self.raw.region = unsafe { region.add(1) }.cast();
+        self.raw.len -= 1;
 
         Some(unsafe { region.read() })
     }
@@ -94,6 +95,7 @@ impl<'o, T, Idx: Index> WriteRegion<'o, T, Idx> {
         } else {
             return Some(WriteRegionSlot(
                 &mut self.raw.region,
+                &mut self.raw.len,
                 self.raw.start_index_storage,
                 PhantomData,
             ));
@@ -116,14 +118,20 @@ impl<'o, T, Idx: Index> WriteRegion<'o, T, Idx> {
     }
 }
 
-pub struct WriteRegionSlot<'o, T, Idx>(&'o mut NonNull<()>, &'o mut Idx, PhantomData<fn(T)>);
+pub struct WriteRegionSlot<'o, T, Idx>(
+    &'o mut NonNull<()>,
+    &'o mut usize,
+    &'o mut Idx,
+    PhantomData<fn(T)>,
+);
 
 impl<'o, T, Idx: Index> WriteRegionSlot<'o, T, Idx> {
     pub fn fill(self, value: T) {
         let t: NonNull<MaybeUninit<T>> = self.0.cast();
         unsafe { t.write(MaybeUninit::new(value)) };
         *self.0 = unsafe { t.add(1) }.cast();
-        Index::wrapping_add_mut(self.1, 1);
+        *self.1 -= 1;
+        Index::wrapping_add_mut(self.2, 1);
     }
 }
 
@@ -169,5 +177,45 @@ mod tests {
         assert_eq!(r.pop(), Some(10));
         assert_eq!(r.pop(), Some(11));
         assert_eq!(r.pop(), None);
+    }
+
+    #[test]
+    fn read_region_pop_reports_exhaustion() {
+        let mut buf = Buffer::<i32, 8>::new();
+        let mut w = buf.writer_mut();
+        for i in 0..3 {
+            w.push(i).unwrap();
+        }
+        drop(w);
+
+        let mut r = buf.reader_mut();
+        r.read(|region| {
+            assert_eq!(region.len(), 3);
+            assert_eq!(region.pop(), Some(0));
+            assert_eq!(region.pop(), Some(1));
+            assert_eq!(region.pop(), Some(2));
+            // regression: pop() used to keep reading past the region end
+            // forever, instead of reporting exhaustion
+            assert_eq!(region.pop(), None);
+            assert_eq!(region.len(), 0);
+        });
+        assert_eq!(r.available(), 0);
+    }
+
+    #[test]
+    fn write_region_slots_stop_at_region_end() {
+        let mut buf = Buffer::<i32, 8>::new();
+        let mut w = buf.writer_mut();
+        let mut filled = 0;
+        w.write(|region| {
+            assert_eq!(region.len(), 8);
+            // regression: slot() used to keep handing out slots past the
+            // region end forever, letting writers overrun it
+            while let Some(slot) = region.slot() {
+                slot.fill(filled);
+                filled += 1;
+            }
+        });
+        assert_eq!(filled, 8);
     }
 }
