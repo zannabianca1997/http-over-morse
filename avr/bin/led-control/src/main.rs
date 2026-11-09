@@ -6,65 +6,88 @@ use core::convert::Infallible;
 
 use concurrency::{
     process::ProcessExt,
+    ready::Ready,
     slots::{Slot, Slots},
-    stream::{Stream, StreamExt},
+    stream::{BufferStream, Stream, StreamExt},
 };
 use envparse::parse_env;
-use hal::{
-    led::DebugLed,
-    serial::{SerialRead, SerialReader},
-    Peripherals, Serial,
-};
-use serial::WriteSerial;
+use hal::{Peripherals, Serial, led::DebugLed};
+use serial::{ReadSerial, WriteSerial};
 
 const BUFFER_SIZE: usize = parse_env!("BUFFER_SIZE" as usize else 128);
 
-/// Interpret single byte commands to control the led, answering with the state
-/// after
-struct LedControl {
-    reader: SerialReader,
+/// Interpret single byte commands read from the input stream to control the
+/// led, answering with the state after
+struct LedControl<S> {
+    input: S,
     led: DebugLed,
 }
 
-impl Stream for LedControl {
+struct UnknownCommand(u8);
+
+impl<S> Stream for LedControl<S>
+where
+    S: BufferStream<Item = u8, Err = Infallible>,
+{
     type Item = u8;
-    type Err = Infallible;
+    type Err = UnknownCommand;
 
-    fn fill<S>(&mut self, slots: &mut S) -> nb::Result<(), Self::Err>
+    fn fill<T>(&mut self, slots: &mut T) -> nb::Result<(), Self::Err>
     where
-        S: Slots<Item = Self::Item>,
+        T: Slots<Item = Self::Item>,
     {
-        while let Some(slot) = slots.slot() {
-            let command = self.reader.read()?;
+        self.input
+            .with_ready(|ready| {
+                let mut work_done = false;
 
-            let state = match command {
-                // \0 - turn off
-                0x00 => {
-                    self.led.off();
-                    false
-                }
-                // \1 - turn on
-                0x01 => {
-                    self.led.on();
-                    true
-                }
-                // \2 - toggle
-                0x02 => {
-                    let state = !self.led.state();
-                    if state {
-                        self.led.on();
-                    } else {
-                        self.led.off();
+                while let Some(slot) = slots.slot()
+                    && let Some(command) = ready.pop()
+                {
+                    let mut state = None;
+                    match command {
+                        // \1 - turn off
+                        0x01 => {
+                            self.led.off();
+                            state = Some(false);
+                        }
+                        // \2 - turn on
+                        0x02 => {
+                            self.led.on();
+                            state = Some(true);
+                        }
+                        // \3 - toggle
+                        0x03 => {
+                            let new_state = !self.led.state();
+                            if new_state {
+                                self.led.on();
+                            } else {
+                                self.led.off();
+                            }
+                            state = Some(new_state);
+                        }
+                        // \4 - no-op, effectively a read
+                        0x04 => state = Some(self.led.state()),
+                        // unknown command: ignore it silently. Line noise reads
+                        // as `\0`, and answering it would only feed the storm
+                        _ => {}
+                    };
+
+                    if let Some(state) = state {
+                        work_done = true;
+                        // the state is encoded as `\1` when off and `\2` when
+                        // on: `\0` is never a valid answer, so line noise is
+                        // always distinguishable from one
+                        slot.fill(1 + state as u8);
                     }
-                    state
                 }
-                // \4 and any unknown command are no-ops
-                _ => self.led.state(),
-            };
 
-            slot.fill(state as u8);
-        }
-        Ok(())
+                if work_done {
+                    Ok(())
+                } else {
+                    Err(nb::Error::WouldBlock)
+                }
+            })
+            .unwrap_or_else(|err| match err {})
     }
 }
 
@@ -72,13 +95,22 @@ impl Stream for LedControl {
 fn main() -> ! {
     let Peripherals {
         serial: Serial { reader, writer },
-        wires: (_, wire),
-    } = Peripherals::new().unwrap();
-    let led = wire.downgrade_to_led();
+        debug_led: led,
+        ..
+    } = unsafe {
+        // SAFETY: main just started
+        Peripherals::new_unchecked()
+    };
 
-    LedControl { reader, led }
-        .buffer::<BUFFER_SIZE, usize>()
-        .sink_into(WriteSerial::new(writer))
-        .handle_errors(|err| match err {})
-        .block_on()
+    LedControl {
+        input: ReadSerial::new(reader).buffer::<BUFFER_SIZE, usize>(),
+        led,
+    }
+    .buffer::<BUFFER_SIZE, usize>()
+    .sink_into(WriteSerial::new(writer))
+    .handle_errors(|err| {
+        let UnknownCommand(_command) = err.left_or_else(|err| match err {});
+        // can't do much
+    })
+    .block_on()
 }

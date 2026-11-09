@@ -8,8 +8,8 @@ use crate::pins::Pin13;
 pub struct DebugLed(Pin13);
 
 impl DebugLed {
-    pub(crate) fn new(pin_13: Pin13) -> Self {
-        Self(pin_13)
+    pub(crate) fn new(pin: Pin13) -> Self {
+        Self(pin)
     }
 
     pub fn state(&self) -> bool {

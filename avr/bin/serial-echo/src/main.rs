@@ -14,7 +14,10 @@ fn main() -> ! {
     let Peripherals {
         serial: Serial { reader, writer },
         ..
-    } = Peripherals::new().unwrap();
+    } = unsafe {
+        // SAFETY: main just started
+        Peripherals::new_unchecked()
+    };
 
     ReadSerial::new(reader)
         .buffer::<BUFFER_SIZE, usize>()
